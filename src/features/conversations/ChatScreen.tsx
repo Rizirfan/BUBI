@@ -6,56 +6,26 @@ import { db } from '@/db/client'
 import type { Conversation, Message, Reaction } from '@/types'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { Composer } from '@/components/chat/Composer'
-import { EMOJI_MAP } from '@/features/emojis/emoji'
+import { SettingsModal } from '@/components/settings/SettingsModal'
 
 function uid() {
   return crypto.randomUUID()
 }
 
-function getAvatarGradient(name: string) {
-  const gradients = [
-    'from-indigo-500 to-purple-600',
-    'from-blue-500 to-cyan-500',
-    'from-emerald-500 to-teal-600',
-    'from-rose-500 to-pink-600',
-    'from-amber-500 to-orange-600',
-    'from-violet-500 to-indigo-600',
-  ]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return gradients[Math.abs(hash) % gradients.length]
-}
-
-function getInitials(name: string) {
-  return (
-    name
-      .split(' ')
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase())
-      .join('') || 'U'
-  )
-}
-
-function renderSnippet(text: string) {
-  if (!text) return 'No messages yet'
-  // Replace [:emoji:] with emoji label or clean text for snippets
-  return text.replace(/\[:([a-z0-9_-]+):\]/g, (_, id) => `[${EMOJI_MAP[id]?.label || id}]`)
-}
-
 export function ChatScreen() {
-  const { user, token, logout } = useAuthStore()
+  const { user, token } = useAuthStore()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [reactions, setReactions] = useState<Reaction[]>([])
   const [users, setUsers] = useState<{ id: string; username: string; displayName: string }[]>([])
   const [showNew, setShowNew] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [loading, setLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [chatSearchQuery, setChatSearchQuery] = useState('')
+  const [chatSearchOpen, setChatSearchOpen] = useState(false)
   const [userSearchQuery, setUserSearchQuery] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const activeIdRef = useRef<string | null>(null)
@@ -168,6 +138,8 @@ export function ChatScreen() {
     socket.emit('conversation:join', activeId)
     void loadMessages(activeId)
     setSidebarOpen(false)
+    setChatSearchOpen(false)
+    setChatSearchQuery('')
   }, [activeId, token])
 
   useEffect(() => {
@@ -219,10 +191,10 @@ export function ChatScreen() {
     )
   }
 
-  async function toggleReaction(messageId: string, emojiId: string) {
+  async function toggleReaction(messageId: string, emoji: string) {
     if (!token) return
     const socket = getSocket(token)
-    socket.emit('reaction:toggle', { messageId, emojiId }, (ack: any) => {
+    socket.emit('reaction:toggle', { messageId, emojiId: emoji }, (ack: any) => {
       if (!ack?.ok) return
       if (ack.action === 'added' && ack.reaction) {
         setReactions((prev) =>
@@ -236,7 +208,7 @@ export function ChatScreen() {
               !(
                 r.messageId === messageId &&
                 r.userId === user?.id &&
-                r.emojiId === emojiId
+                r.emojiId === emoji
               ),
           ),
         )
@@ -272,6 +244,12 @@ export function ChatScreen() {
     })
   }, [conversations, searchQuery, user])
 
+  const displayedMessages = useMemo(() => {
+    if (!chatSearchQuery.trim()) return messages
+    const q = chatSearchQuery.toLowerCase()
+    return messages.filter((m) => m.text.toLowerCase().includes(q))
+  }, [messages, chatSearchQuery])
+
   const filteredUsers = useMemo(() => {
     const nonSelf = users.filter((u) => u.id !== user?.id)
     if (!userSearchQuery.trim()) return nonSelf
@@ -284,100 +262,66 @@ export function ChatScreen() {
   }, [users, userSearchQuery, user])
 
   return (
-    <div className="h-full flex bg-[#09090b] text-[#f4f4f5] overflow-hidden">
+    <div className="h-full flex bg-[var(--bg)] text-[var(--text)] overflow-hidden">
       {/* ===================== SIDEBAR ===================== */}
       <aside
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
-        } md:flex flex-col w-full md:w-[360px] lg:w-[380px] shrink-0 border-r border-white/8 bg-[#0e0f16]/95 backdrop-blur-xl z-20`}
+        } md:flex flex-col w-full md:w-[320px] lg:w-[340px] shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-bg)] z-20`}
       >
-        {/* User Identity & Top Actions Bar */}
-        <div className="px-4 pt-[calc(14px+var(--safe-top))] pb-3.5 border-b border-white/8">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div
-                className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${getAvatarGradient(
-                  user?.displayName || 'User',
-                )} flex items-center justify-center text-white font-bold text-sm shadow-md shadow-indigo-950/50 shrink-0`}
-              >
-                {getInitials(user?.displayName || 'User')}
+        {/* User bar */}
+        <div className="px-4 pt-[calc(12px+var(--safe-top))] pb-3 border-b border-[var(--border)]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
+                {user?.displayName?.[0]?.toUpperCase() || 'U'}
               </div>
               <div className="min-w-0">
-                <div className="font-semibold text-sm text-white truncate leading-tight">
-                  {user?.displayName}
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="truncate">@{user?.username}</span>
-                </div>
+                <div className="font-semibold text-sm truncate">{user?.displayName}</div>
+                <div className="text-xs text-[var(--text-muted)] truncate">@{user?.username}</div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* New Chat Button */}
+            <div className="flex items-center gap-1">
+              {/* Settings button */}
+              <button
+                type="button"
+                onClick={() => setShowSettings(true)}
+                className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
+                title="Settings"
+                aria-label="Settings"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+
+              {/* New Chat button */}
               <button
                 type="button"
                 onClick={() => setShowNew(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 active:scale-95 transition-all cursor-pointer"
-                title="Start New Conversation"
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span>New</span>
-              </button>
-
-              {/* Logout Button */}
-              <button
-                type="button"
-                onClick={logout}
-                className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 active:scale-95 transition-all"
-                title="Sign out"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
+                + New
               </button>
             </div>
           </div>
 
-          {/* Search Conversations Input */}
-          <div className="mt-3.5 relative">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
+          {/* Search conversations */}
+          <div className="mt-3 relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search conversations…"
-              className="w-full bg-white/5 border border-white/5 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 focus:bg-white/8 transition"
+              placeholder="Search chats…"
+              className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-1.5 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-blue-500"
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs"
-              >
-                ✕
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {/* Conversation List */}
+        <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
           {filteredConversations.map((c) => {
             const title = titleFor(c)
             const isActive = activeId === c.id
@@ -386,45 +330,27 @@ export function ChatScreen() {
                 key={c.id}
                 type="button"
                 onClick={() => setActiveId(c.id)}
-                className={`w-full text-left p-3 rounded-2xl transition-all cursor-pointer flex items-center gap-3 relative ${
+                className={`w-full text-left p-2.5 rounded-xl transition flex items-center gap-3 ${
                   isActive
-                    ? 'bg-gradient-to-r from-indigo-900/30 to-blue-900/20 border border-indigo-500/30 shadow-md shadow-indigo-950/20'
-                    : 'hover:bg-white/[0.04] border border-transparent'
+                    ? 'bg-blue-600/10 text-blue-500'
+                    : 'hover:bg-[var(--surface-hover)] text-[var(--text)]'
                 }`}
               >
-                {/* Active Indicator Bar */}
-                {isActive && (
-                  <div className="absolute left-1 top-3 bottom-3 w-1 bg-indigo-500 rounded-full" />
-                )}
-
-                {/* Avatar */}
-                <div
-                  className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getAvatarGradient(
-                    title,
-                  )} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}
-                >
-                  {getInitials(title)}
+                <div className="w-10 h-10 rounded-full bg-blue-600/20 text-blue-500 font-semibold flex items-center justify-center text-sm shrink-0">
+                  {title[0]?.toUpperCase() || 'C'}
                 </div>
-
-                {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span
-                      className={`text-sm font-semibold truncate ${
-                        isActive ? 'text-white' : 'text-zinc-200'
-                      }`}
-                    >
-                      {title}
-                    </span>
-                    <span className="text-[11px] text-zinc-500 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium truncate">{title}</span>
+                    <span className="text-[11px] text-[var(--text-muted)] shrink-0">
                       {new Date(c.lastMessageAt).toLocaleTimeString([], {
                         hour: 'numeric',
                         minute: '2-digit',
                       })}
                     </span>
                   </div>
-                  <p className="text-xs text-zinc-400 truncate mt-0.5">
-                    {renderSnippet(c.lastMessagePreview || '')}
+                  <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
+                    {c.lastMessagePreview || 'No messages yet'}
                   </p>
                 </div>
               </button>
@@ -432,138 +358,123 @@ export function ChatScreen() {
           })}
 
           {filteredConversations.length === 0 && (
-            <div className="py-12 px-4 text-center space-y-3">
-              <div className="text-xs text-zinc-500">
-                {searchQuery ? 'No results found' : 'No conversations yet'}
-              </div>
-              {!searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setShowNew(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all inline-flex items-center gap-1.5"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  <span>New Chat</span>
-                </button>
-              )}
+            <div className="py-12 text-center text-xs text-[var(--text-muted)]">
+              {searchQuery ? 'No chats found' : 'No chats yet. Tap + New to start one.'}
             </div>
           )}
         </div>
       </aside>
 
-      {/* ===================== MAIN CHAT AREA ===================== */}
+      {/* ===================== CHAT MAIN ===================== */}
       <main
         className={`${
           sidebarOpen ? 'hidden md:flex' : 'flex'
-        } flex-1 flex-col min-w-0 bg-[#09090b] relative`}
+        } flex-1 flex-col min-w-0 bg-[var(--bg)] relative`}
       >
         {!active ? (
-          /* Empty Selection State */
-          <div className="flex-1 flex items-center justify-center p-6 text-center">
-            <div className="max-w-xs space-y-3 animate-enter">
-              <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-zinc-500">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                </svg>
-              </div>
-              <div className="space-y-1">
-                <h2 className="text-sm font-semibold text-zinc-300">
-                  Select a chat
-                </h2>
-                <p className="text-xs text-zinc-500">
-                  Choose a conversation or start a new one.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowNew(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all inline-flex items-center gap-1.5"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                <span>New Chat</span>
-              </button>
+          <div className="flex-1 flex items-center justify-center p-4 text-center">
+            <div className="space-y-2 text-[var(--text-muted)]">
+              <div className="text-sm font-medium">Select a chat</div>
+              <p className="text-xs">Choose a conversation from the sidebar</p>
             </div>
           </div>
         ) : (
-          /* Active Chat View */
           <>
-            {/* Conversation Header */}
-            <header className="px-4 pt-[calc(12px+var(--safe-top))] pb-3 border-b border-white/8 bg-[#0d0e15]/90 backdrop-blur-xl flex items-center justify-between gap-3 shrink-0">
+            {/* Header */}
+            <header className="px-4 pt-[calc(10px+var(--safe-top))] pb-2.5 border-b border-[var(--border)] bg-[var(--surface)] flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                {/* Mobile Back Button */}
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(true)}
-                  className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 active:scale-95 transition"
-                  aria-label="Back to conversations"
+                  className="md:hidden text-xs text-blue-500 font-medium"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
+                  Back
                 </button>
-
-                {/* Recipient Avatar */}
-                <div
-                  className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getAvatarGradient(
-                    titleFor(active),
-                  )} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}
-                >
-                  {getInitials(titleFor(active))}
+                <div className="w-9 h-9 rounded-full bg-blue-600/20 text-blue-500 font-semibold flex items-center justify-center text-sm shrink-0">
+                  {titleFor(active)[0]?.toUpperCase() || 'C'}
                 </div>
-
                 <div className="min-w-0">
-                  <div className="font-semibold text-sm text-white truncate leading-tight">
-                    {titleFor(active)}
-                  </div>
-                  <div className="text-xs text-zinc-400 mt-0.5 truncate">
+                  <div className="font-semibold text-sm truncate">{titleFor(active)}</div>
+                  <div className="text-xs text-[var(--text-muted)] truncate">
                     {otherParticipant(active)?.username
                       ? `@${otherParticipant(active)?.username}`
-                      : 'Direct chat'}
+                      : 'Chat'}
                   </div>
                 </div>
               </div>
+
+              {/* In-chat search toggle */}
+              <button
+                type="button"
+                onClick={() => setChatSearchOpen((v) => !v)}
+                className={`p-1.5 rounded-lg text-xs transition ${
+                  chatSearchOpen
+                    ? 'bg-blue-600 text-white'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)]'
+                }`}
+                title="Search in conversation"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </button>
             </header>
 
-            {/* Message Stream */}
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-2">
+            {/* In-chat search bar */}
+            {chatSearchOpen && (
+              <div className="px-4 py-2 bg-[var(--surface-hover)] border-b border-[var(--border)] flex items-center gap-2">
+                <input
+                  type="text"
+                  value={chatSearchQuery}
+                  onChange={(e) => setChatSearchQuery(e.target.value)}
+                  placeholder="Search in this chat…"
+                  className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-1 text-xs text-[var(--text)] outline-none"
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    setChatSearchOpen(false)
+                    setChatSearchQuery('')
+                  }}
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
               {loading && (
-                <div className="text-center py-6 text-xs text-zinc-500 animate-pulse">
+                <div className="text-center py-4 text-xs text-[var(--text-muted)]">
                   Loading…
                 </div>
               )}
 
-              {messages.length === 0 && !loading && (
-                <div className="text-center py-16 text-xs text-zinc-500">
-                  No messages yet
+              {displayedMessages.length === 0 && !loading && (
+                <div className="text-center py-12 text-xs text-[var(--text-muted)]">
+                  {chatSearchQuery ? 'No matching messages' : 'No messages yet'}
                 </div>
               )}
 
-              {messages.map((m, i) => {
-                const prev = messages[i - 1]
+              {displayedMessages.map((m, i) => {
+                const prev = displayedMessages[i - 1]
                 const mine = m.senderId === user?.id
                 const showTail =
-                  !messages[i + 1] || messages[i + 1].senderId !== m.senderId
+                  !displayedMessages[i + 1] ||
+                  displayedMessages[i + 1].senderId !== m.senderId
                 const showTime =
                   !prev || m.createdAt - prev.createdAt > 5 * 60 * 1000
 
                 return (
-                  <div key={m.id || m.clientNonce} className="animate-enter">
+                  <div key={m.id || m.clientNonce}>
                     {showTime && (
-                      <div className="flex justify-center my-4">
-                        <span className="text-[11px] font-medium text-zinc-400 bg-white/5 border border-white/10 px-3 py-0.5 rounded-full">
-                          {new Date(m.createdAt).toLocaleString([], {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
-                        </span>
+                      <div className="text-[11px] text-[var(--text-muted)] text-center my-2">
+                        {new Date(m.createdAt).toLocaleTimeString([], {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
                       </div>
                     )}
                     <MessageBubble
@@ -572,7 +483,7 @@ export function ChatScreen() {
                       showTail={showTail}
                       reactions={reactions.filter((r) => r.messageId === m.id)}
                       currentUserId={user?.id || ''}
-                      onToggleReaction={(emojiId) => void toggleReaction(m.id, emojiId)}
+                      onToggleReaction={(emoji) => void toggleReaction(m.id, emoji)}
                     />
                   </div>
                 )
@@ -588,34 +499,30 @@ export function ChatScreen() {
 
       {/* ===================== NEW CHAT MODAL ===================== */}
       {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-enter">
-          <div className="w-full max-w-md bg-[#12131d] border border-white/10 rounded-3xl shadow-2xl p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-enter">
+          <div className="w-full max-w-sm bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 shadow-xl space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">New Chat</h3>
+              <h3 className="text-sm font-semibold">New Chat</h3>
               <button
                 type="button"
                 onClick={() => setShowNew(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition"
+                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)]"
               >
                 ✕
               </button>
             </div>
 
-            {/* Search user input */}
-            <div className="relative">
-              <input
-                type="text"
-                value={userSearchQuery}
-                onChange={(e) => setUserSearchQuery(e.target.value)}
-                placeholder="Search users…"
-                className="w-full bg-[#181926] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-indigo-500 transition"
-              />
-            </div>
+            <input
+              type="text"
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              placeholder="Search users…"
+              className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-1.5 text-xs text-[var(--text)] outline-none focus:border-blue-500"
+            />
 
-            {/* User List */}
-            <div className="max-h-60 overflow-y-auto space-y-1 pr-1">
+            <div className="max-h-56 overflow-y-auto space-y-1">
               {filteredUsers.length === 0 && (
-                <div className="py-6 text-center text-xs text-zinc-500">
+                <div className="py-6 text-center text-xs text-[var(--text-muted)]">
                   No users found
                 </div>
               )}
@@ -624,44 +531,22 @@ export function ChatScreen() {
                   key={u.id}
                   type="button"
                   onClick={() => void startDirect(u.id)}
-                  className="w-full text-left p-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] border border-white/5 hover:border-indigo-500/40 transition-all flex items-center justify-between gap-3 group cursor-pointer"
+                  className="w-full text-left p-2 rounded-xl hover:bg-[var(--surface-hover)] flex items-center justify-between text-xs transition"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className={`w-9 h-9 rounded-xl bg-gradient-to-br ${getAvatarGradient(
-                        u.displayName,
-                      )} flex items-center justify-center text-white font-bold text-xs shrink-0`}
-                    >
-                      {getInitials(u.displayName)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-semibold text-xs text-white truncate">
-                        {u.displayName}
-                      </div>
-                      <div className="text-[11px] text-zinc-400 truncate">
-                        @{u.username}
-                      </div>
-                    </div>
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{u.displayName}</div>
+                    <div className="text-[11px] text-[var(--text-muted)] truncate">@{u.username}</div>
                   </div>
-                  <span className="text-xs font-semibold text-indigo-400 group-hover:text-indigo-300 shrink-0">
-                    Chat
-                  </span>
+                  <span className="text-blue-500 font-medium">Chat</span>
                 </button>
               ))}
-            </div>
-
-            <div className="pt-2 border-t border-white/5 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowNew(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white hover:bg-white/5 transition"
-              >
-                Cancel
-              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ===================== SETTINGS MODAL ===================== */}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   )
 }
