@@ -354,18 +354,17 @@ export function ChatScreen() {
       senderId: user.id,
       text,
       emojiIds,
-      status: 'pending',
+      status: 'sent',
       createdAt: Date.now(),
       updatedAt: Date.now(),
       clientNonce,
     }
 
-    // 1. Immediately show message in the active chat view so "No messages yet" never shows
+    // 1. Immediately show message in the active chat view with single checkmark (0ms latency)
     setMessages((prev) => [...prev, optimistic])
     await db.messages.put(optimistic)
 
     // 2. Immediately update the conversation list in the sidebar so it displays the message preview
-    //    instead of "No messages yet"
     setConversations((prev) =>
       prev
         .map((c) =>
@@ -381,7 +380,7 @@ export function ChatScreen() {
         .sort((a, b) => b.lastMessageAt - a.lastMessageAt),
     )
 
-    // 3. Send via Socket with automatic HTTP REST fallback
+    // 3. Send via Socket with automatic ultra-fast HTTP REST fallback
     let handled = false
     const confirmMessage = (serverMsg: Message) => {
       if (handled) return
@@ -410,37 +409,24 @@ export function ChatScreen() {
     }
 
     const socket = getSocket(token)
-    if (socket.connected) {
-      socket.emit(
-        'message:send',
-        { conversationId: activeId, text, emojiIds, clientNonce },
-        (ack: any) => {
-          if (ack?.ok && ack.message) {
-            confirmMessage(ack.message)
-          } else {
-            api
-              .sendMessage(activeId, { text, emojiIds, clientNonce })
-              .then((res) => confirmMessage(res.message))
-              .catch(() => {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.clientNonce === clientNonce ? { ...m, status: 'failed' } : m,
-                  ),
-                )
-              })
-          }
-        },
-      )
-    }
+    socket.emit(
+      'message:send',
+      { conversationId: activeId, text, emojiIds, clientNonce },
+      (ack: any) => {
+        if (ack?.ok && ack.message) {
+          confirmMessage(ack.message)
+        }
+      },
+    )
 
-    // Safety fallback: If socket was disconnected or ack takes longer than 2000ms, use HTTP POST
+    // Ultra-fast safety fallback: If socket doesn't acknowledge within 350ms, deliver via HTTP POST
     setTimeout(() => {
       if (!handled) {
         api
           .sendMessage(activeId, { text, emojiIds, clientNonce })
           .then((res) => confirmMessage(res.message))
           .catch(() => {
-            if (!handled) {
+            if (!handled && !socket.connected) {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.clientNonce === clientNonce ? { ...m, status: 'failed' } : m,
@@ -449,7 +435,7 @@ export function ChatScreen() {
             }
           })
       }
-    }, socket.connected ? 2000 : 0)
+    }, socket.connected ? 350 : 0)
   }
 
   async function toggleReaction(messageId: string, emoji: string) {

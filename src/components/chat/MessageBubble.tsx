@@ -113,11 +113,15 @@ export function MessageBubble({
                 {formattedTime}
               </span>
               {mine && (
-                message.status === 'pending' ? (
-                  <span className="text-[10px] text-white/70">🕒</span>
-                ) : (
+                message.status === 'failed' ? (
+                  <span className="text-red-200 text-xs font-bold" title="Failed to send">⚠️</span>
+                ) : message.status === 'delivered' ? (
                   <span className="text-white font-bold text-xs" title="Delivered">
                     ✓✓
+                  </span>
+                ) : (
+                  <span className="text-white/85 font-semibold text-xs" title="Sent">
+                    ✓
                   </span>
                 )
               )}

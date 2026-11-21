@@ -11,7 +11,7 @@ function serializeMessage(m: any) {
     senderId: m.senderId,
     text: m.text,
     emojiIds: JSON.parse(m.emojiIdsJson || '[]'),
-    status: 'sent',
+    status: 'delivered',
     createdAt: m.createdAt.getTime(),
     updatedAt: m.updatedAt.getTime(),
     clientNonce: m.clientNonce ?? undefined,
@@ -133,19 +133,20 @@ export async function conversationRoutes(app: FastifyInstance) {
     await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
     const serialized = serializeMessage(msg)
 
-    // Broadcast through socket if available
+    // Broadcast through socket asynchronously without blocking HTTP response
     const io = getIO()
     if (io) {
       io.to(`conversation:${conversationId}`).emit('message:new', serialized)
-      const members = await prisma.conversationMember.findMany({ where: { conversationId } })
-      for (const m of members) {
-        io.to(`user:${m.userId}`).emit('message:new', serialized)
-        io.to(`user:${m.userId}`).emit('conversation:updated', {
-          conversationId,
-          lastMessagePreview: text,
-          lastMessageAt: serialized.createdAt,
-        })
-      }
+      prisma.conversationMember.findMany({ where: { conversationId } }).then((members) => {
+        for (const m of members) {
+          io.to(`user:${m.userId}`).emit('message:new', serialized)
+          io.to(`user:${m.userId}`).emit('conversation:updated', {
+            conversationId,
+            lastMessagePreview: text,
+            lastMessageAt: serialized.createdAt,
+          })
+        }
+      }).catch(() => {})
     }
 
     return { message: serialized }
