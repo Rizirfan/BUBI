@@ -17,10 +17,23 @@ export function AuthScreen() {
     setError(null)
     setBusy(true)
     try {
+      let u = username.trim().replace(/^@+/, '')
+      let d = displayName.trim().replace(/^@+/, '')
+
       if (mode === 'login') {
-        await login(username.trim(), password)
+        await login(u, password)
       } else {
-        await register(username.trim(), displayName.trim(), password)
+        // If user put full name (with spaces) in username and handle in displayName:
+        if (u.includes(' ') && !d.includes(' ')) {
+          const temp = u
+          u = d
+          d = temp
+        } else if (u.includes(' ')) {
+          // If username has spaces, replace spaces with underscores
+          u = u.replace(/\s+/g, '_')
+        }
+        if (!d) d = u
+        await register(u, d, password)
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please check your credentials.')
@@ -73,28 +86,10 @@ export function AuthScreen() {
 
           {/* Form */}
           <form onSubmit={submit} className="space-y-3">
-            <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">
-                Username
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                minLength={3}
-                maxLength={32}
-                autoComplete="username"
-                autoCapitalize="none"
-                placeholder="username"
-                className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-blue-500 transition"
-              />
-            </div>
-
             {mode === 'register' && (
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">
-                  Display Name
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                  Full Name / Display Name
                 </label>
                 <input
                   type="text"
@@ -103,21 +98,49 @@ export function AuthScreen() {
                   required
                   minLength={1}
                   maxLength={50}
-                  placeholder="Your Name"
-                  className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-blue-500 transition"
+                  placeholder="e.g. Mohamed Irfan"
+                  className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--wa-green)] transition"
                 />
               </div>
             )}
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs text-[var(--text-muted)]">
+                <label className="block text-xs font-medium text-[var(--text-muted)]">
+                  {mode === 'register' ? 'Username Handle' : 'Username'}
+                </label>
+                {mode === 'register' && (
+                  <span className="text-[10px] text-[var(--text-muted)]">no spaces</span>
+                )}
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)] font-medium select-none">
+                  @
+                </span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.replace(/^@+/, ''))}
+                  required
+                  minLength={3}
+                  maxLength={32}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  placeholder={mode === 'register' ? 'mohd_irfan' : 'username'}
+                  className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl pl-7 pr-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--wa-green)] transition"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-[var(--text-muted)]">
                   Password
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text)]"
+                  className="text-[10px] text-[var(--wa-green)] hover:opacity-80 cursor-pointer font-medium"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -130,7 +153,7 @@ export function AuthScreen() {
                 minLength={6}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 placeholder="••••••••"
-                className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-blue-500 transition"
+                className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--wa-green)] transition"
               />
             </div>
 
