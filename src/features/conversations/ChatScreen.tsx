@@ -13,7 +13,12 @@ import { ContactProfileModal } from '@/components/profile/ContactProfileModal'
 import { NotesPage } from '@/features/notes/NotesPage'
 import { ProfilePage } from '@/features/profile/ProfilePage'
 import { BubiLogo, BubiBrand } from '@/components/ui/BubiLogo'
-import { NoteIcon, PenEditIcon } from '@/components/ui/Icons'
+import {
+  NoteIcon,
+  PenEditIcon,
+  CircleUserIcon,
+  NotebookIcon,
+} from '@/components/ui/Icons'
 
 function uid() {
   return crypto.randomUUID()
@@ -513,10 +518,7 @@ export function ChatScreen() {
                         className="w-full text-left px-4 py-2 hover:bg-[var(--surface-hover)] text-[var(--text)] flex items-center justify-between"
                       >
                         <span>Profile &amp; Bio</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-muted)]" aria-hidden="true">
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                        </svg>
+                        <CircleUserIcon size={16} className="text-[var(--text-muted)]" />
                       </button>
                       <button
                         onClick={() => {
@@ -527,10 +529,7 @@ export function ChatScreen() {
                         className="w-full text-left px-4 py-2 hover:bg-[var(--surface-hover)] text-[var(--text)] flex items-center justify-between"
                       >
                         <span>Daily Notes Page</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-muted)]" aria-hidden="true">
-                          <path d="M12 20h9" />
-                          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                        </svg>
+                        <NotebookIcon size={16} className="text-[var(--text-muted)]" />
                       </button>
                       <button
                         onClick={() => {
@@ -1135,7 +1134,7 @@ export function ChatScreen() {
               setSidebarOpen(true)
               setActiveId(null)
             }}
-            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
+            className={`flex-1 flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition cursor-pointer ${
               sidebarView === 'contacts' && !activeId
                 ? 'text-[var(--wa-green)] font-semibold'
                 : 'text-[var(--text-muted)] hover:text-[var(--text)]'
@@ -1148,40 +1147,6 @@ export function ChatScreen() {
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
             <span className="text-[11px]">Contacts</span>
-          </button>
-
-          {/* Profile Tab */}
-          <button
-            type="button"
-            onClick={() => {
-              setSidebarView('profile')
-              setSidebarOpen(false)
-              setActiveId(null)
-            }}
-            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
-              sidebarView === 'profile'
-                ? 'text-[var(--wa-green)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'profile' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-            <span className="text-[11px]">Profile</span>
-          </button>
-
-          {/* Settings Tab */}
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
-            className="flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] transition cursor-pointer"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            <span className="text-[11px]">Settings</span>
           </button>
         </nav>
       )}
