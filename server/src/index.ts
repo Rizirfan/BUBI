@@ -6,12 +6,15 @@ import { authRoutes } from './routes/auth.js'
 import { conversationRoutes } from './routes/conversations.js'
 import { setupSocket } from './realtime/socket.js'
 import { prisma } from './db.js'
+import { corsOriginHandler } from './cors.js'
 
 const app = Fastify({ logger: true })
 
 await app.register(cors, {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: corsOriginHandler,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 })
 
 await app.register(jwt, {

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify'
 import { prisma } from '../db.js'
 import { z } from 'zod'
 import type { AuthPayload } from '../auth.js'
+import { corsOriginHandler } from '../cors.js'
 
 const sendSchema = z.object({
   conversationId: z.string().min(1),
@@ -32,7 +33,7 @@ function serializeMessage(m: any) {
 
 export function setupSocket(app: FastifyInstance) {
   const io = new Server(app.server, {
-    cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173', credentials: true },
+    cors: { origin: corsOriginHandler, credentials: true },
   })
 
   io.use(async (socket, next) => {
