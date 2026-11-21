@@ -128,13 +128,54 @@ export function ChatScreen() {
   async function loadMessages(conversationId: string) {
     setLoading(true)
     try {
+      // 1. Immediately read from local IndexedDB so cached messages are displayed without any empty flash
+      const local = await db.messages
+        .where('conversationId')
+        .equals(conversationId)
+        .sortBy('createdAt')
+      if (local && local.length > 0) {
+        setMessages((prev) => {
+          const pending = prev.filter(
+            (m) => m.conversationId === conversationId && m.status === 'pending',
+          )
+          const merged = [
+            ...local,
+            ...pending.filter(
+              (p) => !local.some((l) => l.clientNonce === p.clientNonce || l.id === p.id),
+            ),
+          ]
+          return merged.sort((a, b) => a.createdAt - b.createdAt)
+        })
+      }
+
+      // 2. Fetch fresh messages from API
       const res = await api.messages(conversationId)
-      setMessages(res.messages)
+
+      // 3. Merge server messages with any pending optimistic messages that haven't been acked yet
+      setMessages((prev) => {
+        const pending = prev.filter(
+          (m) =>
+            m.conversationId === conversationId &&
+            m.status === 'pending' &&
+            !res.messages.some(
+              (rm) => rm.clientNonce === m.clientNonce || rm.id === m.id,
+            ),
+        )
+        return [...res.messages, ...pending].sort((a, b) => a.createdAt - b.createdAt)
+      })
+
       setReactions(res.reactions)
       await db.messages.bulkPut(res.messages)
       await db.reactions.bulkPut(res.reactions)
     } catch (err) {
       console.error('Failed to load messages', err)
+      const local = await db.messages
+        .where('conversationId')
+        .equals(conversationId)
+        .sortBy('createdAt')
+      if (local && local.length > 0) {
+        setMessages(local)
+      }
     } finally {
       setLoading(false)
     }
@@ -318,28 +359,97 @@ export function ChatScreen() {
       updatedAt: Date.now(),
       clientNonce,
     }
+
+    // 1. Immediately show message in the active chat view so "No messages yet" never shows
     setMessages((prev) => [...prev, optimistic])
     await db.messages.put(optimistic)
-    const socket = getSocket(token)
-    socket.emit(
-      'message:send',
-      { conversationId: activeId, text, emojiIds, clientNonce },
-      (ack: any) => {
-        if (ack?.ok && ack.message) {
-          setMessages((prev) =>
-            prev.map((m) => (m.clientNonce === clientNonce ? ack.message : m)),
-          )
-          void db.messages.delete(optimistic.id)
-          void db.messages.put(ack.message)
-        } else {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.clientNonce === clientNonce ? { ...m, status: 'failed' } : m,
-            ),
-          )
-        }
-      },
+
+    // 2. Immediately update the conversation list in the sidebar so it displays the message preview
+    //    instead of "No messages yet"
+    setConversations((prev) =>
+      prev
+        .map((c) =>
+          c.id === activeId
+            ? {
+                ...c,
+                lastMessagePreview: text,
+                lastMessageAt: optimistic.createdAt,
+                updatedAt: optimistic.createdAt,
+              }
+            : c,
+        )
+        .sort((a, b) => b.lastMessageAt - a.lastMessageAt),
     )
+
+    // 3. Send via Socket with automatic HTTP REST fallback
+    let handled = false
+    const confirmMessage = (serverMsg: Message) => {
+      if (handled) return
+      handled = true
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.clientNonce === clientNonce || m.id === optimistic.id ? serverMsg : m,
+        ),
+      )
+      void db.messages.delete(optimistic.id)
+      void db.messages.put(serverMsg)
+      setConversations((prev) =>
+        prev
+          .map((c) =>
+            c.id === activeId
+              ? {
+                  ...c,
+                  lastMessagePreview: serverMsg.text,
+                  lastMessageAt: serverMsg.createdAt,
+                  updatedAt: serverMsg.createdAt,
+                }
+              : c,
+          )
+          .sort((a, b) => b.lastMessageAt - a.lastMessageAt),
+      )
+    }
+
+    const socket = getSocket(token)
+    if (socket.connected) {
+      socket.emit(
+        'message:send',
+        { conversationId: activeId, text, emojiIds, clientNonce },
+        (ack: any) => {
+          if (ack?.ok && ack.message) {
+            confirmMessage(ack.message)
+          } else {
+            api
+              .sendMessage(activeId, { text, emojiIds, clientNonce })
+              .then((res) => confirmMessage(res.message))
+              .catch(() => {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.clientNonce === clientNonce ? { ...m, status: 'failed' } : m,
+                  ),
+                )
+              })
+          }
+        },
+      )
+    }
+
+    // Safety fallback: If socket was disconnected or ack takes longer than 2000ms, use HTTP POST
+    setTimeout(() => {
+      if (!handled) {
+        api
+          .sendMessage(activeId, { text, emojiIds, clientNonce })
+          .then((res) => confirmMessage(res.message))
+          .catch(() => {
+            if (!handled) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.clientNonce === clientNonce ? { ...m, status: 'failed' } : m,
+                ),
+              )
+            }
+          })
+      }
+    }, socket.connected ? 2000 : 0)
   }
 
   async function toggleReaction(messageId: string, emoji: string) {

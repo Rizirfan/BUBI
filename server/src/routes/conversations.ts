@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthPayload } from '../auth.js'
+import { getIO } from '../realtime/socket.js'
 
 function serializeMessage(m: any) {
   return {
@@ -98,5 +99,55 @@ export async function conversationRoutes(app: FastifyInstance) {
       messages: msgs.map(serializeMessage),
       reactions: reactions.map(r => ({ id: r.id, messageId: r.messageId, userId: r.userId, emojiId: r.emojiId, createdAt: r.createdAt.getTime() })),
     }
+  })
+
+  app.post('/api/conversations/:id/messages', { preHandler: requireAuth }, async (request, reply) => {
+    const auth = request.user as AuthPayload
+    const { id: conversationId } = request.params as { id: string }
+    const postSendSchema = z.object({
+      text: z.string().trim().min(1).max(2000),
+      emojiIds: z.array(z.string()).optional().default([]),
+      clientNonce: z.string().optional(),
+    })
+    const parsed = postSendSchema.safeParse(request.body)
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid input' })
+    const { text, emojiIds } = parsed.data
+    const clientNonce = parsed.data.clientNonce || crypto.randomUUID()
+
+    const member = await prisma.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId: auth.sub } },
+    })
+    if (!member) return reply.code(403).send({ error: 'Forbidden' })
+
+    const msg = await prisma.message.upsert({
+      where: { conversationId_clientNonce: { conversationId, clientNonce } },
+      update: {},
+      create: {
+        conversationId,
+        senderId: auth.sub,
+        text,
+        emojiIdsJson: JSON.stringify(emojiIds || []),
+        clientNonce,
+      },
+    })
+    await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
+    const serialized = serializeMessage(msg)
+
+    // Broadcast through socket if available
+    const io = getIO()
+    if (io) {
+      io.to(`conversation:${conversationId}`).emit('message:new', serialized)
+      const members = await prisma.conversationMember.findMany({ where: { conversationId } })
+      for (const m of members) {
+        io.to(`user:${m.userId}`).emit('message:new', serialized)
+        io.to(`user:${m.userId}`).emit('conversation:updated', {
+          conversationId,
+          lastMessagePreview: text,
+          lastMessageAt: serialized.createdAt,
+        })
+      }
+    }
+
+    return { message: serialized }
   })
 }

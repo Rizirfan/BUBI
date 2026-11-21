@@ -31,10 +31,17 @@ function serializeMessage(m: any) {
   }
 }
 
+let ioInstance: Server | null = null
+
+export function getIO(): Server | null {
+  return ioInstance
+}
+
 export function setupSocket(app: FastifyInstance) {
   const io = new Server(app.server, {
     cors: { origin: corsOriginHandler, credentials: true },
   })
+  ioInstance = io
 
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token || (socket.handshake.headers.authorization || '').replace('Bearer ', '')

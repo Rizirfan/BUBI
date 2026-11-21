@@ -55,4 +55,9 @@ export const api = {
     request<{ conversation: Conversation }>('/conversations/direct', { method: 'POST', body: JSON.stringify({ userId }) }),
   messages: (conversationId: string) =>
     request<{ messages: Message[]; reactions: Reaction[] }>(`/conversations/${conversationId}/messages`),
+  sendMessage: (conversationId: string, body: { text: string; emojiIds?: string[]; clientNonce?: string }) =>
+    request<{ message: Message }>(`/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 }
