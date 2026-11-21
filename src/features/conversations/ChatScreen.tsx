@@ -101,6 +101,7 @@ export function ChatScreen() {
   const menuRef = useRef<HTMLDivElement>(null)
   const activeIdRef = useRef<string | null>(null)
   activeIdRef.current = activeId
+  const seenMessageIdsRef = useRef<Set<string>>(new Set())
 
   const active = useMemo(
     () => conversations.find((c) => c.id === activeId) || null,
@@ -203,6 +204,12 @@ export function ChatScreen() {
     const socket = getSocket(token)
 
     const onNew = (msg: Message) => {
+      // Deduplicate: avoid any duplicate event incrementing unread counts twice
+      if (seenMessageIdsRef.current.has(msg.id)) {
+        return
+      }
+      seenMessageIdsRef.current.add(msg.id)
+
       const isMine = msg.senderId === user.id
       const isCurrentChatOpen =
         msg.conversationId === activeIdRef.current && !document.hidden
@@ -523,8 +530,8 @@ export function ChatScreen() {
           {sidebarView !== 'contacts' ? (
           /* ================= CHATS VIEW ================= */
           <>
-            {/* WhatsApp Header */}
-            <div className="px-3.5 py-3 bg-[var(--header-bg)] flex items-center justify-between border-b border-[var(--border)]">
+            {/* WhatsApp Header with safe-area-inset-top */}
+            <div className="px-3.5 py-3 pt-[calc(0.75rem+var(--safe-top))] bg-[var(--header-bg)] flex items-center justify-between border-b border-[var(--border)]">
               {/* User Avatar & Profile Trigger -> Strictly redirects to Profile Page */}
               <button
                 type="button"
@@ -772,8 +779,8 @@ export function ChatScreen() {
         ) : (
           /* ================= CONTACTS VIEW (WHATSAPP NEW CHAT) ================= */
           <>
-            {/* WhatsApp Green Header */}
-            <div className="bg-[var(--wa-teal)] text-white px-4 py-4 flex items-center gap-4 shrink-0 shadow-sm">
+            {/* WhatsApp Header with safe-area-inset-top */}
+            <div className="bg-[var(--wa-teal)] text-white px-4 py-4 pt-[calc(1rem+var(--safe-top))] flex items-center gap-4 shrink-0 shadow-sm">
               <button
                 type="button"
                 onClick={() => setSidebarView('chats')}
@@ -941,7 +948,7 @@ export function ChatScreen() {
         <main
           className={`${
             sidebarOpen ? 'hidden md:flex' : 'flex'
-          } flex-1 flex-col min-w-0 bg-[var(--bg)] relative wa-chat-bg`}
+          } flex-1 flex-col min-w-0 min-h-0 overflow-hidden bg-[var(--bg)] relative wa-chat-bg`}
         >
         {!active ? (
           /* Empty WhatsApp Wallpaper State */
@@ -979,8 +986,8 @@ export function ChatScreen() {
         ) : (
           /* Active Chat Conversation */
           <>
-            {/* WhatsApp Header */}
-            <header className="px-4 py-2.5 bg-[var(--header-bg)] border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0 select-none">
+            {/* WhatsApp Header with safe-area-inset-top */}
+            <header className="px-4 py-2.5 pt-[calc(0.625rem+var(--safe-top))] bg-[var(--header-bg)] border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0 select-none">
               <div className="flex items-center gap-3 min-w-0">
                 {/* Mobile Back to chats */}
                 <button
@@ -1155,7 +1162,14 @@ export function ChatScreen() {
             </div>
 
             {/* Composer */}
-            <Composer onSend={(text, emojiIds) => void send(text, emojiIds)} />
+            <Composer
+              onSend={(text, emojiIds) => void send(text, emojiIds)}
+              onTypingFocus={() => {
+                setTimeout(() => {
+                  bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+                }, 200)
+              }}
+            />
           </>
         )}
       </main>
@@ -1166,84 +1180,86 @@ export function ChatScreen() {
       {/* Persistently visible across Chats, Notes, Contacts, and Profile on mobile */}
       {/* Hidden only when actively chatting inside a 1-on-1 conversation */}
       {!activeId && (
-        <nav className="md:hidden flex items-center justify-around border-t border-[var(--border)] bg-[var(--header-bg)] py-1.5 pb-[calc(6px+var(--safe-bottom))] shrink-0 select-none z-30 shadow-sm">
-          {/* Chats Tab with total unread notification badge */}
-          <button
-            type="button"
-            onClick={() => {
-              setSidebarView('chats')
-              setSidebarOpen(true)
-              setActiveId(null)
-            }}
-            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
-              sidebarView === 'chats' && !activeId
-                ? 'text-[var(--wa-green)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            <div className="relative">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'chats' && !activeId ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              {totalUnreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-[var(--wa-green)] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
-                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px]">Chats</span>
-          </button>
+        <nav className="md:hidden border-t border-[var(--border)] bg-[var(--header-bg)] py-1.5 pb-[calc(8px+var(--safe-bottom))] shrink-0 select-none z-30 shadow-sm">
+          <div className="max-w-md w-full mx-auto flex items-center justify-around px-2">
+            {/* Chats Tab with total unread notification badge */}
+            <button
+              type="button"
+              onClick={() => {
+                setSidebarView('chats')
+                setSidebarOpen(true)
+                setActiveId(null)
+              }}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
+                sidebarView === 'chats' && !activeId
+                  ? 'text-[var(--wa-green)] font-semibold'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              }`}
+            >
+              <div className="relative">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'chats' && !activeId ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                {totalUnreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-[var(--wa-green)] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
+                    {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px]">Chats</span>
+            </button>
 
-          {/* Notes Tab with contacts' daily notes count badge */}
-          <button
-            type="button"
-            onClick={() => {
-              setSidebarView('notes')
-              setSidebarOpen(false)
-              setActiveId(null)
-            }}
-            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
-              sidebarView === 'notes'
-                ? 'text-[var(--wa-green)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            <div className="relative">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'notes' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-              {contactsWithNotesCount > 0 && (
-                <span className="absolute -top-1 -right-2 min-w-3.5 h-3.5 px-1 rounded-full bg-amber-400 text-white text-[9px] font-bold flex items-center justify-center">
-                  {contactsWithNotesCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px]">Notes</span>
-          </button>
+            {/* Notes Tab with contacts' daily notes count badge */}
+            <button
+              type="button"
+              onClick={() => {
+                setSidebarView('notes')
+                setSidebarOpen(false)
+                setActiveId(null)
+              }}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
+                sidebarView === 'notes'
+                  ? 'text-[var(--wa-green)] font-semibold'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              }`}
+            >
+              <div className="relative">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'notes' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+                {contactsWithNotesCount > 0 && (
+                  <span className="absolute -top-1 -right-2 min-w-3.5 h-3.5 px-1 rounded-full bg-amber-400 text-white text-[9px] font-bold flex items-center justify-center">
+                    {contactsWithNotesCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px]">Notes</span>
+            </button>
 
-          {/* Contacts Tab */}
-          <button
-            type="button"
-            onClick={() => {
-              setSidebarView('contacts')
-              setSidebarOpen(true)
-              setActiveId(null)
-            }}
-            className={`flex-1 flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition cursor-pointer ${
-              sidebarView === 'contacts' && !activeId
-                ? 'text-[var(--wa-green)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'contacts' && !activeId ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <span className="text-[11px]">Contacts</span>
-          </button>
+            {/* Contacts Tab */}
+            <button
+              type="button"
+              onClick={() => {
+                setSidebarView('contacts')
+                setSidebarOpen(true)
+                setActiveId(null)
+              }}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition cursor-pointer ${
+                sidebarView === 'contacts' && !activeId
+                  ? 'text-[var(--wa-green)] font-semibold'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              }`}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'contacts' && !activeId ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              <span className="text-[11px]">Contacts</span>
+            </button>
+          </div>
         </nav>
       )}
 

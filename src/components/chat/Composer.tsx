@@ -1,17 +1,37 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react'
 import { EmojiPicker } from './EmojiPicker'
 import { useSettingsStore } from '@/features/settings/store'
 
 export function Composer({
   onSend,
+  onTypingFocus,
 }: {
   onSend: (text: string, emojiIds: string[]) => void
+  onTypingFocus?: () => void
 }) {
   const [text, setText] = useState('')
   const [showEmoji, setShowEmoji] = useState(false)
   const { sendOnEnter } = useSettingsStore()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
+
+  // Dynamically calculate and adjust the text bar height based on content
+  const adjustHeight = useCallback(() => {
+    const el = textareaRef.current
+    if (!el) return
+    // Temporarily reset height to 0 to accurately detect scrollHeight
+    el.style.height = '0px'
+    const scrollH = el.scrollHeight
+    // Dynamic bounded expansion: min single-line height = 36px, max height = 140px (~5 lines)
+    const nextHeight = Math.max(36, Math.min(scrollH, 140))
+    el.style.height = `${nextHeight}px`
+    el.style.overflowY = scrollH > 140 ? 'auto' : 'hidden'
+  }, [])
+
+  // Auto-grow and shrink dynamically whenever text changes (typed, pasted, emoji, deleted, or cleared)
+  useLayoutEffect(() => {
+    adjustHeight()
+  }, [text, adjustHeight])
 
   function submit(e?: React.FormEvent) {
     e?.preventDefault()
@@ -21,15 +41,9 @@ export function Composer({
     setText('')
     setShowEmoji(false)
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = '36px'
+      textareaRef.current.style.overflowY = 'hidden'
     }
-  }
-
-  function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    setText(e.target.value)
-    const el = e.target
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`
   }
 
   useEffect(() => {
@@ -53,11 +67,12 @@ export function Composer({
     })
     setTimeout(() => {
       textareaRef.current?.focus()
+      adjustHeight()
     }, 50)
   }
 
   return (
-    <div className="relative px-3 sm:px-4 py-2 bg-[var(--header-bg)] border-t border-[var(--border)] pb-[calc(8px+var(--safe-bottom))]">
+    <div className="shrink-0 sticky bottom-0 z-20 w-full px-3 sm:px-4 py-2 bg-[var(--header-bg)]/95 backdrop-blur-md border-t border-[var(--border)] pb-[calc(8px+var(--safe-bottom))] shadow-xs transition-all">
       {/* Real Emoji Picker Popover */}
       {showEmoji && (
         <div ref={pickerRef} className="absolute bottom-full left-3 sm:left-4 mb-2 z-40">
@@ -65,15 +80,15 @@ export function Composer({
         </div>
       )}
 
-      <form onSubmit={submit} className="flex items-center gap-2 max-w-4xl mx-auto">
-        {/* Emoji Button */}
+      <form onSubmit={submit} className="flex items-end gap-2 max-w-4xl mx-auto">
+        {/* Emoji Button - aligned cleanly with bottom line */}
         <button
           type="button"
           onClick={() => setShowEmoji((v) => !v)}
-          className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition text-xl ${
+          className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition text-xl cursor-pointer ${
             showEmoji
-              ? 'text-[var(--wa-green)]'
-              : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              ? 'text-[var(--wa-green)] bg-[var(--surface-hover)]'
+              : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)]'
           }`}
           aria-label="Emojis"
           title="Emojis"
@@ -81,12 +96,16 @@ export function Composer({
           😀
         </button>
 
-        {/* WhatsApp Pill Input */}
-        <div className="flex-1 bg-[var(--surface-active)] rounded-lg px-3.5 py-1.5 focus-within:ring-1 focus-within:ring-[var(--wa-green)] transition">
+        {/* Dynamic WhatsApp-style Expanding Text Pill */}
+        <div className="flex-1 min-w-0 bg-[var(--surface-active)] border border-[var(--border)] focus-within:border-[var(--wa-green)] focus-within:ring-2 focus-within:ring-[var(--wa-green)]/20 rounded-2xl px-3.5 py-1 transition-all">
           <textarea
             ref={textareaRef}
             value={text}
-            onChange={handleInput}
+            onChange={(e) => setText(e.target.value)}
+            onInput={adjustHeight}
+            onFocus={() => {
+              onTypingFocus?.()
+            }}
             onKeyDown={(e) => {
               if (sendOnEnter && e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -98,7 +117,8 @@ export function Composer({
             }}
             rows={1}
             placeholder="Type a message"
-            className="w-full resize-none bg-transparent text-[var(--text)] text-[14.5px] leading-relaxed placeholder-[var(--text-muted)] outline-none max-h-28 py-0.5 scrollbar-none"
+            className="w-full resize-none bg-transparent text-[var(--text)] text-[15px] leading-[22px] placeholder-[var(--text-muted)] outline-none py-1.5 block scrollbar-none transition-[height] duration-75"
+            style={{ height: '36px', minHeight: '36px', maxHeight: '140px', overflowY: 'hidden' }}
           />
         </div>
 
@@ -106,9 +126,9 @@ export function Composer({
         <button
           type="submit"
           disabled={!text.trim()}
-          className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition shadow-sm ${
+          className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${
             text.trim()
-              ? 'bg-[var(--wa-green)] text-white hover:bg-[var(--wa-green-hover)] active:scale-95 cursor-pointer'
+              ? 'bg-[var(--wa-green)] text-white hover:bg-[var(--wa-green-hover)] active:scale-95 cursor-pointer shadow-orange-500/20'
               : 'bg-[var(--surface-active)] text-[var(--text-muted)] opacity-50 cursor-not-allowed'
           }`}
           aria-label="Send"

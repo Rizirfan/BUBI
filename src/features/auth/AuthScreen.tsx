@@ -48,7 +48,7 @@ export function AuthScreen() {
   }
 
   return (
-    <div className="min-h-full bg-[var(--bg)] text-[var(--text)] flex items-center justify-center p-4">
+    <div className="min-h-full bg-[var(--bg)] text-[var(--text)] flex items-center justify-center p-4 pt-[calc(1rem+var(--safe-top))] pb-[calc(1rem+var(--safe-bottom))]">
       <div className="w-full max-w-xs relative z-10 animate-enter">
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-lg p-6">
           {/* Brand Logo Header */}

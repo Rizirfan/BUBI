@@ -104,18 +104,13 @@ export function setupSocket(app: FastifyInstance) {
         // Immediate acknowledgment for instant UI feedback
         ack?.({ ok: true, message: serialized })
 
-        // Asynchronously broadcast to conversation room and to each member directly
+        // Broadcast to conversation room (emitted exactly once per message)
         io.to(`conversation:${conversationId}`).emit('message:new', serialized)
-        prisma.conversationMember.findMany({ where: { conversationId } }).then((members) => {
-          for (const m of members) {
-            io.to(`user:${m.userId}`).emit('message:new', serialized)
-            io.to(`user:${m.userId}`).emit('conversation:updated', {
-              conversationId,
-              lastMessagePreview: text,
-              lastMessageAt: serialized.createdAt,
-            })
-          }
-        }).catch(() => {})
+        io.to(`conversation:${conversationId}`).emit('conversation:updated', {
+          conversationId,
+          lastMessagePreview: text,
+          lastMessageAt: serialized.createdAt,
+        })
       } catch (e: any) {
         ack?.({ error: e?.message || 'Failed to send' })
       }

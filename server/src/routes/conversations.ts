@@ -133,20 +133,15 @@ export async function conversationRoutes(app: FastifyInstance) {
     await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
     const serialized = serializeMessage(msg)
 
-    // Broadcast through socket asynchronously without blocking HTTP response
+    // Broadcast through socket asynchronously (emitted exactly once per message)
     const io = getIO()
     if (io) {
       io.to(`conversation:${conversationId}`).emit('message:new', serialized)
-      prisma.conversationMember.findMany({ where: { conversationId } }).then((members) => {
-        for (const m of members) {
-          io.to(`user:${m.userId}`).emit('message:new', serialized)
-          io.to(`user:${m.userId}`).emit('conversation:updated', {
-            conversationId,
-            lastMessagePreview: text,
-            lastMessageAt: serialized.createdAt,
-          })
-        }
-      }).catch(() => {})
+      io.to(`conversation:${conversationId}`).emit('conversation:updated', {
+        conversationId,
+        lastMessagePreview: text,
+        lastMessageAt: serialized.createdAt,
+      })
     }
 
     return { message: serialized }

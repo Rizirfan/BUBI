@@ -69,8 +69,8 @@ export function ProfilePage({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[var(--bg)] text-[var(--text)] overflow-y-auto wa-chat-bg">
-      {/* Top Sticky Header */}
-      <header className="sticky top-0 z-10 px-4 py-3 bg-[var(--header-bg)]/95 backdrop-blur-md border-b border-[var(--border)] flex items-center justify-between shadow-xs">
+      {/* Top Sticky Header with safe-area-inset-top */}
+      <header className="sticky top-0 z-10 px-4 py-3 pt-[calc(0.75rem+var(--safe-top))] bg-[var(--header-bg)]/95 backdrop-blur-md border-b border-[var(--border)] flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-3">
           <button
             type="button"
