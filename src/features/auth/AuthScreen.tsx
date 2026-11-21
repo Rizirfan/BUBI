@@ -1,39 +1,44 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuthStore } from './store'
 import { BubiLogo, BubiBrand } from '@/components/ui/BubiLogo'
 
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [username, setUsername] = useState('')
-  const [displayName, setDisplayName] = useState('')
+  const [name, setName] = useState('')
+  const [customHandle, setCustomHandle] = useState('')
+  const [showCustomHandle, setShowCustomHandle] = useState(false)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const { login, register } = useAuthStore()
 
+  // Auto-assigned username handle from name, with default @bubi fallback
+  const autoHandle = useMemo(() => {
+    const slug = name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+    return slug || 'bubi'
+  }, [name])
+
+  const effectiveHandle = showCustomHandle && customHandle.trim()
+    ? customHandle.trim().replace(/^@+/, '')
+    : autoHandle
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setBusy(true)
     try {
-      let u = username.trim().replace(/^@+/, '')
-      let d = displayName.trim().replace(/^@+/, '')
-
       if (mode === 'login') {
-        await login(u, password)
+        const identifier = name.trim().replace(/^@+/, '')
+        await login(identifier, password)
       } else {
-        // If user put full name (with spaces) in username and handle in displayName:
-        if (u.includes(' ') && !d.includes(' ')) {
-          const temp = u
-          u = d
-          d = temp
-        } else if (u.includes(' ')) {
-          // If username has spaces, replace spaces with underscores
-          u = u.replace(/\s+/g, '_')
-        }
-        if (!d) d = u
-        await register(u, d, password)
+        const displayName = name.trim() || 'BUBI User'
+        const username = effectiveHandle
+        await register(username, displayName, password)
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please check your credentials.')
@@ -85,53 +90,66 @@ export function AuthScreen() {
           </div>
 
           {/* Form */}
-          <form onSubmit={submit} className="space-y-3">
-            {mode === 'register' && (
-              <div>
+          <form onSubmit={submit} className="space-y-3.5">
+            {/* Name Input */}
+            <div>
+              <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                {mode === 'register' ? 'Your Name' : 'Your Name or Handle'}
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                minLength={2}
+                maxLength={50}
+                autoFocus
+                placeholder={mode === 'register' ? 'e.g. Mohamed Irfan' : 'e.g. Mohamed Irfan or @bubi'}
+                className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--wa-green)] transition"
+              />
+
+              {/* In register mode, show assigned @bubi handle indicator */}
+              {mode === 'register' && (
+                <div className="mt-1.5 flex items-center justify-between text-[11px] px-1">
+                  <span className="text-[var(--text-muted)]">Assigned handle:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-[var(--wa-green)]">
+                      @{effectiveHandle}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomHandle((v) => !v)}
+                      className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text)] underline cursor-pointer"
+                    >
+                      {showCustomHandle ? 'auto' : 'customize'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Optional Custom Handle override */}
+            {mode === 'register' && showCustomHandle && (
+              <div className="animate-enter">
                 <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                  Full Name / Display Name
+                  Custom Handle
                 </label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  required
-                  minLength={1}
-                  maxLength={50}
-                  placeholder="e.g. Mohamed Irfan"
-                  className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--wa-green)] transition"
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)] font-medium select-none">
+                    @
+                  </span>
+                  <input
+                    type="text"
+                    value={customHandle}
+                    onChange={(e) => setCustomHandle(e.target.value.replace(/^@+/, ''))}
+                    placeholder={autoHandle}
+                    className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl pl-7 pr-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--wa-green)] transition"
+                  />
+                </div>
               </div>
             )}
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-[var(--text-muted)]">
-                  {mode === 'register' ? 'Username Handle' : 'Username'}
-                </label>
-                {mode === 'register' && (
-                  <span className="text-[10px] text-[var(--text-muted)]">no spaces</span>
-                )}
-              </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)] font-medium select-none">
-                  @
-                </span>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.replace(/^@+/, ''))}
-                  required
-                  minLength={3}
-                  maxLength={32}
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  placeholder={mode === 'register' ? 'mohd_irfan' : 'username'}
-                  className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl pl-7 pr-3 py-2 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--wa-green)] transition"
-                />
-              </div>
-            </div>
-
+            {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-medium text-[var(--text-muted)]">
@@ -158,7 +176,7 @@ export function AuthScreen() {
             </div>
 
             {error && (
-              <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+              <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs leading-relaxed">
                 {error}
               </div>
             )}

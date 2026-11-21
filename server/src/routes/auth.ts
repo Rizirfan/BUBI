@@ -37,47 +37,56 @@ const updateProfileSchema = z.object({
 export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/register', async (request, reply) => {
     const body = (typeof request.body === 'object' && request.body ? request.body : {}) as any
+    let rawName = String(body.displayName || body.name || '').trim()
     let rawUsername = String(body.username || '').trim()
-    let rawDisplayName = String(body.displayName || '').trim()
     const rawPassword = String(body.password || '')
 
-    // Strip leading '@' if user typed handle like '@Mohd_irfan'
-    let username = rawUsername.replace(/^@+/, '')
-    let displayName = rawDisplayName.replace(/^@+/, '')
-
-    // If user put full name (with spaces) in username and handle in displayName:
-    // e.g. username = "Mohamed Irfan", displayName = "Mohd_irfan" -> intelligently assign correctly
-    if (username.includes(' ') && !displayName.includes(' ')) {
-      const temp = username
-      username = displayName
-      displayName = temp
-    } else if (username.includes(' ')) {
-      // If username has spaces, auto-replace spaces with underscores
-      username = username.replace(/\s+/g, '_')
+    if (!rawPassword || rawPassword.length < 6) {
+      return reply.code(400).send({ error: 'Password must be at least 6 characters' })
     }
 
+    // Determine displayName
+    let displayName = rawName
+    if (!displayName && rawUsername) {
+      displayName = rawUsername.replace(/^@+/, '')
+    }
     if (!displayName) {
-      displayName = rawDisplayName || rawUsername || username
+      displayName = 'BUBI User'
     }
 
-    const parsed = credsSchema.safeParse({ username, displayName, password: rawPassword })
-    if (!parsed.success) {
-      const firstError = Object.values(parsed.error.flatten().fieldErrors)[0]?.[0] || 'Invalid input'
-      return reply.code(400).send({ error: firstError, details: parsed.error.flatten() })
+    // Determine clean username handle
+    let baseHandle = rawUsername.replace(/^@+/, '').toLowerCase()
+    // If username was not given or had spaces, derive it from displayName
+    if (!baseHandle || baseHandle.includes(' ') || baseHandle === 'bubi') {
+      baseHandle = displayName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+    }
+    if (!baseHandle || baseHandle.length < 3) {
+      baseHandle = `${baseHandle || 'user'}_bubi`
+    }
+    if (baseHandle.length < 3) {
+      baseHandle = `bubi_${Math.floor(100 + Math.random() * 900)}`
     }
 
-    const existing = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { username: { equals: username } },
-          { username: { equals: username.toLowerCase() } },
-        ],
-      },
-    })
-    if (existing) return reply.code(409).send({ error: 'Username already taken. Please choose another.' })
+    // Ensure unique username handle automatically (never fail on duplicate)
+    let candidateUsername = baseHandle.slice(0, 32)
+    let counter = 1
+    while (await prisma.user.findFirst({ where: { username: { equals: candidateUsername } } })) {
+      const suffix = `_${counter}`
+      candidateUsername = `${baseHandle.slice(0, 32 - suffix.length)}${suffix}`
+      counter++
+    }
 
     const passwordHash = await hashPassword(rawPassword)
-    const user = await prisma.user.create({ data: { username, displayName, passwordHash } })
+    const user = await prisma.user.create({
+      data: {
+        username: candidateUsername,
+        displayName,
+        passwordHash,
+      },
+    })
     const payload: AuthPayload = { sub: user.id, username: user.username, displayName: user.displayName }
     const token = app.jwt.sign(payload)
     return {
@@ -96,33 +105,41 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post('/api/auth/login', async (request, reply) => {
     const body = (typeof request.body === 'object' && request.body ? request.body : {}) as any
-    let rawUsername = String(body.username || '').trim()
+    let rawIdentifier = String(body.username || body.name || '').trim()
     const rawPassword = String(body.password || '')
 
-    // Strip leading '@' if user typed handle like '@Mohd_irfan'
-    const username = rawUsername.replace(/^@+/, '')
-
-    const parsed = loginSchema.safeParse({ username, password: rawPassword })
-    if (!parsed.success) {
-      const firstError = Object.values(parsed.error.flatten().fieldErrors)[0]?.[0] || 'Invalid input'
-      return reply.code(400).send({ error: firstError })
+    if (!rawIdentifier) {
+      return reply.code(400).send({ error: 'Name or username is required' })
+    }
+    if (!rawPassword) {
+      return reply.code(400).send({ error: 'Password is required' })
     }
 
-    // Try finding by exact username, username with spaces converted to underscores, or by displayName
-    let user = await prisma.user.findUnique({ where: { username } })
+    const cleanInput = rawIdentifier.replace(/^@+/, '')
+    const slugInput = cleanInput.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+
+    // Find by exact username, lowercase username, slugged username, or displayName
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: cleanInput } },
+          { username: { equals: cleanInput.toLowerCase() } },
+          { username: { equals: slugInput } },
+          { displayName: { equals: rawIdentifier } },
+          { displayName: { equals: cleanInput } },
+        ],
+      },
+    })
+
     if (!user) {
-      user = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { username: { equals: username.replace(/\s+/g, '_') } },
-            { displayName: { equals: rawUsername } },
-          ],
-        },
-      })
+      return reply.code(401).send({ error: 'Account not found. Please check your name or create an account.' })
     }
-    if (!user) return reply.code(401).send({ error: 'Invalid username or password' })
+
     const ok = await verifyPassword(rawPassword, user.passwordHash)
-    if (!ok) return reply.code(401).send({ error: 'Invalid username or password' })
+    if (!ok) {
+      return reply.code(401).send({ error: 'Incorrect password. Please try again.' })
+    }
+
     const payload: AuthPayload = { sub: user.id, username: user.username, displayName: user.displayName }
     const token = app.jwt.sign(payload)
     return {
