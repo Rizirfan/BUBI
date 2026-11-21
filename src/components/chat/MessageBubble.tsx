@@ -20,7 +20,6 @@ export function MessageBubble({
   const [showReactionBar, setShowReactionBar] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  // Group reactions by emoji
   const groupedReactions = useMemo(() => {
     const map = new Map<string, { emoji: string; count: number; mine: boolean }>()
     for (const r of reactions) {
@@ -40,19 +39,24 @@ export function MessageBubble({
     setTimeout(() => setCopied(false), 1200)
   }
 
+  const formattedTime = new Date(message.createdAt).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+
   return (
     <div
       className={`flex ${mine ? 'justify-end' : 'justify-start'} group mb-1 relative`}
       onMouseEnter={() => setShowReactionBar(true)}
       onMouseLeave={() => setShowReactionBar(false)}
     >
-      <div className="max-w-[85%] sm:max-w-[70%] relative">
-        {/* Quick Reactions Bar (Instagram / WhatsApp style) */}
+      <div className="max-w-[85%] sm:max-w-[70%] md:max-w-[62%] relative">
+        {/* Floating WhatsApp / Instagram Reaction Bar */}
         {showReactionBar && (
           <div
-            className={`absolute z-30 -top-8 ${
+            className={`absolute z-30 -top-8.5 ${
               mine ? 'right-0' : 'left-0'
-            } flex items-center gap-1 bg-[var(--surface)] border border-[var(--border)] rounded-full px-2 py-0.5 shadow-md`}
+            } flex items-center gap-1 bg-[var(--header-bg)] border border-[var(--border)] rounded-full px-2 py-0.5 shadow-lg select-none`}
           >
             {QUICK_REACTIONS.map((emoji) => (
               <button
@@ -71,8 +75,8 @@ export function MessageBubble({
             <button
               type="button"
               onClick={copyText}
-              className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] px-1.5 py-0.5 ml-1 border-l border-[var(--border)]"
-              title="Copy message"
+              className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] px-1.5 py-0.5 ml-1 border-l border-[var(--border)] cursor-pointer"
+              title="Copy"
             >
               {copied ? '✓' : 'Copy'}
             </button>
@@ -81,39 +85,50 @@ export function MessageBubble({
 
         {/* Message Bubble Body */}
         {onlyEmoji ? (
-          // Jumbo emoji display if message is only emojis (like WhatsApp)
-          <div className="py-1 px-2 text-3xl sm:text-4xl select-text">
-            {message.text}
+          <div className="py-1 px-2 select-text">
+            <span className="text-3xl sm:text-4xl">{message.text}</span>
+            <span className="text-[10px] text-[var(--text-muted)] ml-2 align-bottom">
+              {formattedTime}
+            </span>
           </div>
         ) : (
           <div
-            className={`px-3.5 py-2 text-[14.5px] leading-relaxed break-words select-text ${
+            className={`px-3 py-1.5 text-[14px] leading-relaxed break-words shadow-sm select-text ${
               mine
-                ? 'bg-[var(--bubble-out)] text-[var(--bubble-out-text)]'
-                : 'bg-[var(--bubble-in)] text-[var(--bubble-in-text)]'
+                ? 'bg-[var(--bubble-out)] text-[var(--bubble-out-text)] shadow-orange-950/10'
+                : 'bg-[var(--bubble-in)] text-[var(--bubble-in-text)] border border-[var(--border)]'
             } ${
               showTail
                 ? mine
-                  ? 'rounded-2xl rounded-br-sm'
-                  : 'rounded-2xl rounded-bl-sm'
-                : 'rounded-2xl'
+                  ? 'rounded-lg rounded-tr-none'
+                  : 'rounded-lg rounded-tl-none'
+                : 'rounded-lg'
             }`}
           >
             <span className="whitespace-pre-wrap">{message.text}</span>
+
+            {/* Embedded time & checkmarks */}
+            <span className="inline-flex items-center gap-1 float-right ml-3 mt-1.5 text-[11px] select-none">
+              <span className={mine ? 'text-white/80' : 'text-[var(--text-muted)]'}>
+                {formattedTime}
+              </span>
+              {mine && (
+                message.status === 'pending' ? (
+                  <span className="text-[10px] text-white/70">🕒</span>
+                ) : (
+                  <span className="text-white font-bold text-xs" title="Delivered">
+                    ✓✓
+                  </span>
+                )
+              )}
+            </span>
           </div>
         )}
 
-        {/* Status / Timestamp */}
-        {mine && message.status === 'pending' && (
-          <div className="text-[10px] text-[var(--text-muted)] text-right mt-0.5 pr-1">
-            Sending…
-          </div>
-        )}
-
-        {/* Grouped Reactions List (WhatsApp style attached pills) */}
+        {/* Reaction Counters (Attached under the bubble) */}
         {groupedReactions.length > 0 && (
           <div
-            className={`flex flex-wrap gap-1 mt-1 ${
+            className={`flex flex-wrap gap-1 mt-0.5 ${
               mine ? 'justify-end' : 'justify-start'
             }`}
           >
@@ -122,14 +137,14 @@ export function MessageBubble({
                 key={g.emoji}
                 type="button"
                 onClick={() => onToggleReaction(g.emoji)}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition border ${
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs shadow-xs transition border cursor-pointer ${
                   g.mine
-                    ? 'bg-blue-600/20 border-blue-500/40 text-blue-400'
-                    : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)]'
+                    ? 'bg-[var(--wa-green)]/20 border-[var(--wa-green)] text-[var(--wa-green)]'
+                    : 'bg-[var(--header-bg)] border-[var(--border)] text-[var(--text)]'
                 }`}
               >
                 <span>{g.emoji}</span>
-                <span className="text-[11px] font-medium">{g.count}</span>
+                <span className="text-[10px] font-semibold">{g.count}</span>
               </button>
             ))}
           </div>

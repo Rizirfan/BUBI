@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthStore } from '@/features/auth/store'
 import { AuthScreen } from '@/features/auth/AuthScreen'
 import { ChatScreen } from '@/features/conversations/ChatScreen'
+import { BubiLogo } from '@/components/ui/BubiLogo'
 
 export function App() {
   const { user, loading, init } = useAuthStore()
@@ -13,12 +14,10 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-[#09090b] text-white">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-xl shadow-indigo-600/30 animate-pulse mb-4">
-          B
-        </div>
-        <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
-          <span className="w-3.5 h-3.5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+      <div className="h-full flex flex-col items-center justify-center bg-[var(--bg)] text-[var(--text)]">
+        <BubiLogo size={52} className="shadow-lg mb-4 animate-pulse" />
+        <div className="flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]">
+          <span className="w-4 h-4 border-2 border-orange-200 border-t-[#f97316] rounded-full animate-spin" />
         </div>
       </div>
     )

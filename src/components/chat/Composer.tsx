@@ -32,7 +32,6 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`
   }
 
-  // Click outside to close emoji picker
   useEffect(() => {
     function handleClickOutside(ev: MouseEvent) {
       if (pickerRef.current && !pickerRef.current.contains(ev.target as Node)) {
@@ -58,7 +57,7 @@ export function Composer({
   }
 
   return (
-    <div className="relative px-3 sm:px-4 py-2.5 bg-[var(--surface)] border-t border-[var(--border)] pb-[calc(10px+var(--safe-bottom))]">
+    <div className="relative px-3 sm:px-4 py-2 bg-[var(--header-bg)] border-t border-[var(--border)] pb-[calc(8px+var(--safe-bottom))]">
       {/* Real Emoji Picker Popover */}
       {showEmoji && (
         <div ref={pickerRef} className="absolute bottom-full left-3 sm:left-4 mb-2 z-40">
@@ -66,15 +65,15 @@ export function Composer({
         </div>
       )}
 
-      <form onSubmit={submit} className="flex items-end gap-2 max-w-4xl mx-auto">
+      <form onSubmit={submit} className="flex items-center gap-2 max-w-4xl mx-auto">
         {/* Emoji Button */}
         <button
           type="button"
           onClick={() => setShowEmoji((v) => !v)}
-          className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition text-base ${
+          className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition text-xl ${
             showEmoji
-              ? 'bg-blue-600 text-white'
-              : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)]'
+              ? 'text-[var(--wa-green)]'
+              : 'text-[var(--text-muted)] hover:text-[var(--text)]'
           }`}
           aria-label="Emojis"
           title="Emojis"
@@ -82,8 +81,8 @@ export function Composer({
           😀
         </button>
 
-        {/* Text Area */}
-        <div className="flex-1 bg-[var(--surface-hover)] border border-[var(--border)] rounded-2xl px-3.5 py-1.5 focus-within:border-blue-500 transition">
+        {/* WhatsApp Pill Input */}
+        <div className="flex-1 bg-[var(--surface-active)] rounded-lg px-3.5 py-1.5 focus-within:ring-1 focus-within:ring-[var(--wa-green)] transition">
           <textarea
             ref={textareaRef}
             value={text}
@@ -98,23 +97,23 @@ export function Composer({
               }
             }}
             rows={1}
-            placeholder="Message…"
-            className="w-full resize-none bg-transparent text-[var(--text)] text-sm leading-relaxed placeholder-[var(--text-muted)] outline-none max-h-28 py-0.5 scrollbar-none"
+            placeholder="Type a message"
+            className="w-full resize-none bg-transparent text-[var(--text)] text-[14.5px] leading-relaxed placeholder-[var(--text-muted)] outline-none max-h-28 py-0.5 scrollbar-none"
           />
         </div>
 
-        {/* Send Button */}
+        {/* WhatsApp Circular Green Send Button */}
         <button
           type="submit"
           disabled={!text.trim()}
-          className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition ${
+          className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition shadow-sm ${
             text.trim()
-              ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'
-              : 'bg-[var(--surface-hover)] text-[var(--text-muted)] opacity-50 cursor-not-allowed'
+              ? 'bg-[var(--wa-green)] text-white hover:bg-[var(--wa-green-hover)] active:scale-95 cursor-pointer'
+              : 'bg-[var(--surface-active)] text-[var(--text-muted)] opacity-50 cursor-not-allowed'
           }`}
           aria-label="Send"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="22" y1="2" x2="11" y2="13" />
             <polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>

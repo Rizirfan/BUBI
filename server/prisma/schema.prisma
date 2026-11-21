@@ -13,6 +13,9 @@ model User {
   displayName  String
   passwordHash String
   avatarColor  String?
+  bio          String?  @default("Hey there! I am using BUBI")
+  dailyNote    String?
+  dailyNoteAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   memberships  ConversationMember[]

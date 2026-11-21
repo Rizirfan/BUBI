@@ -1,44 +1,77 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0f1015;
-  --sidebar-bg: #14151b;
-  --surface: #1a1b23;
-  --surface-hover: #22232e;
-  --border: rgba(255, 255, 255, 0.08);
-  --text: #f4f4f6;
-  --text-muted: #8e8f99;
-  --bubble-in: #22232e;
-  --bubble-in-text: #f4f4f6;
-  --bubble-out: #2563eb;
+  /* Pumpkin Orange & White Theme (Primary / Default) */
+  --bg: #fdfaf7;
+  --sidebar-bg: #ffffff;
+  --header-bg: #ffffff;
+  --surface: #ffffff;
+  --surface-hover: #fff7ed;
+  --surface-active: #ffedd5;
+  --input-bg: #ffffff;
+  --border: #f0e6dc;
+  --text: #1c1917;
+  --text-muted: #78716c;
+  
+  /* Pumpkin Orange Accents */
+  --pumpkin: #f97316;
+  --pumpkin-hover: #ea580c;
+  --pumpkin-dark: #c2410c;
+  --pumpkin-light: #fff7ed;
+  
+  /* Bubbles */
+  --bubble-out: #f97316;
   --bubble-out-text: #ffffff;
-  --blue: #2563eb;
+  --bubble-in: #ffffff;
+  --bubble-in-text: #1c1917;
+  
+  /* Controls & Badges */
+  --wa-green: #f97316;
+  --wa-green-hover: #ea580c;
+  --wa-teal: #ea580c;
+  --wa-check: #fdba74;
+
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
 }
 
-html.light-theme {
-  --bg: #f4f4f6;
-  --sidebar-bg: #ffffff;
-  --surface: #ffffff;
-  --surface-hover: #f0f0f3;
-  --border: rgba(0, 0, 0, 0.08);
-  --text: #111216;
-  --text-muted: #6b6c75;
-  --bubble-in: #e8e8ed;
-  --bubble-in-text: #111216;
-  --bubble-out: #2563eb;
+/* Dark Mode option (Warm Dark Pumpkin) */
+html.dark-theme {
+  --bg: #140e0a;
+  --sidebar-bg: #1c140e;
+  --header-bg: #241a12;
+  --surface: #1c140e;
+  --surface-hover: #291e16;
+  --surface-active: #3a2a1f;
+  --input-bg: #241a12;
+  --border: #38281e;
+  --text: #fafaf9;
+  --text-muted: #a8a29e;
+  --bubble-out: #ea580c;
   --bubble-out-text: #ffffff;
+  --bubble-in: #241a12;
+  --bubble-in-text: #fafaf9;
+  --pumpkin: #f97316;
+  --pumpkin-hover: #ea580c;
+  --pumpkin-dark: #c2410c;
+  --pumpkin-light: #291e16;
+  --wa-green: #f97316;
+  --wa-green-hover: #ea580c;
+  --wa-teal: #ea580c;
+  --wa-check: #fdba74;
 }
 
 html, body, #root {
   height: 100%;
+  height: 100dvh;
   margin: 0;
   padding: 0;
-  background-color: var(--bg);
+  overflow: hidden;
+  background-color: var(--sidebar-bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -50,12 +83,27 @@ input, button, textarea {
   font: inherit;
 }
 
-/* Minimal slim scrollbar */
+/* Chat canvas background pattern */
+.wa-chat-bg {
+  background-color: var(--bg);
+  background-image: radial-gradient(rgba(249, 115, 22, 0.08) 1px, transparent 0);
+  background-size: 20px 20px;
+}
+
+html.dark-theme .wa-chat-bg {
+  background-color: var(--bg);
+  background-image: radial-gradient(rgba(249, 115, 22, 0.05) 1px, transparent 0);
+}
+
+/* Slim scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(120, 120, 130, 0.25);
-  border-radius: 10px;
+  background: rgba(249, 115, 22, 0.25);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.45);
 }

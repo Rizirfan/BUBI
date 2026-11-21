@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuthStore } from './store'
+import { BubiLogo } from '@/components/ui/BubiLogo'
 
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -34,10 +35,8 @@ export function AuthScreen() {
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-lg p-6">
           {/* Logo & Header */}
           <div className="text-center mb-5">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-600 text-white font-bold text-xl mb-2">
-              B
-            </div>
-            <h1 className="text-lg font-semibold tracking-tight">
+            <BubiLogo size={52} className="mx-auto mb-2.5 shadow-md" />
+            <h1 className="text-lg font-bold tracking-tight text-[var(--text)]">
               BUBI
             </h1>
           </div>
@@ -50,9 +49,9 @@ export function AuthScreen() {
                 setMode('login')
                 setError(null)
               }}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition ${
+              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition cursor-pointer ${
                 mode === 'login'
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-[var(--wa-green)] text-white shadow-xs'
                   : 'text-[var(--text-muted)] hover:text-[var(--text)]'
               }`}
             >
@@ -64,9 +63,9 @@ export function AuthScreen() {
                 setMode('register')
                 setError(null)
               }}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition ${
+              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition cursor-pointer ${
                 mode === 'register'
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-[var(--wa-green)] text-white shadow-xs'
                   : 'text-[var(--text-muted)] hover:text-[var(--text)]'
               }`}
             >
@@ -146,7 +145,7 @@ export function AuthScreen() {
             <button
               type="submit"
               disabled={busy}
-              className="w-full mt-2 py-2.5 px-4 rounded-xl font-medium text-xs text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition shadow-sm disabled:opacity-50 cursor-pointer"
+              className="w-full mt-2 py-2.5 px-4 rounded-xl font-medium text-xs text-white bg-[var(--wa-green)] hover:bg-[var(--wa-green-hover)] active:scale-[0.98] transition shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {busy ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
             </button>

@@ -5,9 +5,23 @@ export interface Profile {
   username: string
   displayName: string
   avatarColor?: string
+  bio?: string
+  dailyNote?: string
+  dailyNoteAt?: string | number | null
   createdAt: number
   updatedAt: number
   isLocal?: boolean
+}
+
+export interface UserProfile {
+  id: string
+  username: string
+  displayName: string
+  avatarColor?: string
+  bio?: string
+  dailyNote?: string
+  dailyNoteAt?: string | number | null
+  createdAt?: string | number
 }
 
 export interface Conversation {
@@ -42,9 +56,6 @@ export interface Reaction {
   createdAt: number
 }
 
-export interface AuthUser {
-  id: string
-  username: string
-  displayName: string
+export interface AuthUser extends UserProfile {
   token: string
 }

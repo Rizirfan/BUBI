@@ -1,33 +1,96 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuthStore } from '@/features/auth/store'
+import { useSettingsStore } from '@/features/settings/store'
 import { api } from '@/services/api'
 import { getSocket } from '@/services/socket'
 import { db } from '@/db/client'
-import type { Conversation, Message, Reaction } from '@/types'
+import type { Conversation, Message, Reaction, UserProfile } from '@/types'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { Composer } from '@/components/chat/Composer'
 import { SettingsModal } from '@/components/settings/SettingsModal'
+import { ProfileModal } from '@/components/profile/ProfileModal'
+import { ContactProfileModal } from '@/components/profile/ContactProfileModal'
+import { BubiLogo, BubiBrand } from '@/components/ui/BubiLogo'
 
 function uid() {
   return crypto.randomUUID()
 }
 
+// Native Web Audio API notification chime (pleasant WhatsApp-style two-tone pop)
+function playNotificationChime() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    if (ctx.state === 'suspended') ctx.resume()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(1174.66, ctx.currentTime) // D6
+    osc.frequency.setValueAtTime(1567.98, ctx.currentTime + 0.08) // G6
+    gain.gain.setValueAtTime(0.18, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.28)
+  } catch {}
+}
+
+function requestNotificationPermission() {
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+  }
+}
+
+function triggerDesktopNotification(senderName: string, text: string) {
+  if (
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    Notification.permission === 'granted'
+  ) {
+    try {
+      const n = new Notification(senderName, {
+        body: text,
+        icon: '/icons/icon.svg',
+      })
+      n.onclick = () => {
+        window.focus()
+        n.close()
+      }
+    } catch {}
+  }
+}
+
 export function ChatScreen() {
-  const { user, token } = useAuthStore()
+  const { user, token, logout } = useAuthStore()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [reactions, setReactions] = useState<Reaction[]>([])
-  const [users, setUsers] = useState<{ id: string; username: string; displayName: string }[]>([])
-  const [showNew, setShowNew] = useState(false)
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [sidebarView, setSidebarView] = useState<'chats' | 'contacts'>('chats')
+  const [menuOpen, setMenuOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [viewingContact, setViewingContact] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [chatSearchQuery, setChatSearchQuery] = useState('')
   const [chatSearchOpen, setChatSearchOpen] = useState(false)
   const [userSearchQuery, setUserSearchQuery] = useState('')
+  const [unreadMap, setUnreadMap] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem('bubi_unreads')
+      return raw ? JSON.parse(raw) : {}
+    } catch {
+      return {}
+    }
+  })
+
   const bottomRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const activeIdRef = useRef<string | null>(null)
   activeIdRef.current = activeId
 
@@ -35,6 +98,10 @@ export function ChatScreen() {
     () => conversations.find((c) => c.id === activeId) || null,
     [conversations, activeId],
   )
+
+  const totalUnreadCount = useMemo(() => {
+    return Object.values(unreadMap).reduce((acc, count) => acc + count, 0)
+  }, [unreadMap])
 
   async function refreshConversations() {
     try {
@@ -61,13 +128,32 @@ export function ChatScreen() {
     }
   }
 
+  // Clear unreads when active conversation is opened
+  useEffect(() => {
+    if (activeId) {
+      setUnreadMap((prev) => {
+        if (!prev[activeId]) return prev
+        const next = { ...prev, [activeId]: 0 }
+        try {
+          localStorage.setItem('bubi_unreads', JSON.stringify(next))
+        } catch {}
+        return next
+      })
+    }
+  }, [activeId])
+
   useEffect(() => {
     if (!token || !user) return
+    requestNotificationPermission()
     void refreshConversations()
     void api.users().then((r) => setUsers(r.users)).catch(() => {})
     const socket = getSocket(token)
 
     const onNew = (msg: Message) => {
+      const isMine = msg.senderId === user.id
+      const isCurrentChatOpen =
+        msg.conversationId === activeIdRef.current && !document.hidden
+
       if (msg.conversationId === activeIdRef.current) {
         setMessages((prev) =>
           prev.some(
@@ -81,6 +167,7 @@ export function ChatScreen() {
             : [...prev, msg],
         )
       }
+
       setConversations((prev) =>
         prev
           .map((c) =>
@@ -96,6 +183,32 @@ export function ChatScreen() {
           .sort((a, b) => b.lastMessageAt - a.lastMessageAt),
       )
       void db.messages.put(msg)
+
+      // Notify on incoming message from a contact
+      if (!isMine) {
+        if (!isCurrentChatOpen) {
+          setUnreadMap((prev) => {
+            const next = {
+              ...prev,
+              [msg.conversationId]: (prev[msg.conversationId] || 0) + 1,
+            }
+            try {
+              localStorage.setItem('bubi_unreads', JSON.stringify(next))
+            } catch {}
+            return next
+          })
+        }
+
+        // Notification chime
+        if (useSettingsStore.getState().soundEnabled) {
+          playNotificationChime()
+        }
+
+        // Desktop/mobile web notification
+        const sender =
+          users.find((u) => u.id === msg.senderId)?.displayName || 'New message'
+        triggerDesktopNotification(sender, msg.text)
+      }
     }
 
     const onReaction = ({
@@ -130,7 +243,7 @@ export function ChatScreen() {
       socket.off('reaction:updated', onReaction)
       socket.off('conversation:updated', onConvUpdated)
     }
-  }, [token, user])
+  }, [token, user, users])
 
   useEffect(() => {
     if (!activeId || !token) return
@@ -146,11 +259,27 @@ export function ChatScreen() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length, activeId])
 
+  // Close 3-dots menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    if (menuOpen) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
+
   async function startDirect(userId: string) {
-    const res = await api.createDirect(userId)
-    setShowNew(false)
-    await refreshConversations()
-    setActiveId(res.conversation.id)
+    try {
+      const res = await api.createDirect(userId)
+      setSidebarView('chats')
+      await refreshConversations()
+      setActiveId(res.conversation.id)
+      setSidebarOpen(false)
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   async function send(text: string, emojiIds: string[]) {
@@ -222,15 +351,17 @@ export function ChatScreen() {
     return (otherId && c.participantNames?.[otherId]) || c.title || 'Chat'
   }
 
-  function otherParticipant(c: Conversation) {
+  function otherParticipant(c: Conversation): UserProfile | null {
     if (!user) return null
     const otherId = c.participantIds.find((id) => id !== user.id)
     if (!otherId) return null
     const otherUser = users.find((u) => u.id === otherId)
+    if (otherUser) return otherUser
     return {
       id: otherId,
-      name: c.participantNames?.[otherId] || otherUser?.displayName || 'Chat',
-      username: otherUser?.username || '',
+      displayName: c.participantNames?.[otherId] || 'Contact',
+      username: 'contact',
+      bio: 'Hey there! I am using BUBI',
     }
   }
 
@@ -262,174 +393,584 @@ export function ChatScreen() {
   }, [users, userSearchQuery, user])
 
   return (
-    <div className="h-full flex bg-[var(--bg)] text-[var(--text)] overflow-hidden">
+    <div className="h-full flex bg-[var(--sidebar-bg)] text-[var(--text)] overflow-hidden">
       {/* ===================== SIDEBAR ===================== */}
       <aside
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
-        } md:flex flex-col w-full md:w-[320px] lg:w-[340px] shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-bg)] z-20`}
+        } md:flex flex-col w-full md:w-[360px] lg:w-[400px] shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-bg)] z-20`}
       >
-        {/* User bar */}
-        <div className="px-4 pt-[calc(12px+var(--safe-top))] pb-3 border-b border-[var(--border)]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
-                {user?.displayName?.[0]?.toUpperCase() || 'U'}
-              </div>
-              <div className="min-w-0">
-                <div className="font-semibold text-sm truncate">{user?.displayName}</div>
-                <div className="text-xs text-[var(--text-muted)] truncate">@{user?.username}</div>
+        {sidebarView === 'chats' ? (
+          /* ================= CHATS VIEW ================= */
+          <>
+            {/* WhatsApp Header */}
+            <div className="px-3.5 py-3 bg-[var(--header-bg)] flex items-center justify-between border-b border-[var(--border)]">
+              {/* User Avatar & Profile Trigger */}
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(true)}
+                className="flex items-center gap-3 text-left cursor-pointer group min-w-0"
+                title="View & Edit your profile & daily note"
+              >
+                <div className="relative shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-[var(--wa-teal)] text-white font-semibold flex items-center justify-center text-sm shadow-xs group-hover:opacity-90 transition">
+                    {user?.displayName?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                  {user?.dailyNote ? (
+                    <span
+                      className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-[var(--header-bg)] flex items-center justify-center text-[7px]"
+                      title="Daily note active"
+                    >
+                      ✏️
+                    </span>
+                  ) : null}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm leading-tight text-[var(--text)] group-hover:text-[var(--wa-green)] transition truncate">
+                    {user?.displayName}
+                  </div>
+                  <div className="text-[11px] text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5">
+                    <span>@{user?.username}</span>
+                    {user?.dailyNote ? (
+                      <span className="text-[var(--wa-green)] font-semibold">· Note</span>
+                    ) : (
+                      <span className="text-[var(--wa-green)]">· Add note</span>
+                    )}
+                  </div>
+                </div>
+              </button>
+
+              {/* Action Icons */}
+              <div className="flex items-center gap-1 text-[var(--text-muted)]">
+                {/* New Chat / Contacts Icon */}
+                <button
+                  type="button"
+                  onClick={() => setSidebarView('contacts')}
+                  className="p-2 rounded-full hover:bg-[var(--surface-hover)] hover:text-[var(--text)] transition cursor-pointer"
+                  title="New chat / Contacts"
+                  aria-label="New chat"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    <line x1="12" y1="8" x2="12" y2="14" />
+                    <line x1="9" y1="11" x2="15" y2="11" />
+                  </svg>
+                </button>
+
+                {/* 3-Dots Menu Icon */}
+                <div className="relative" ref={menuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((v) => !v)}
+                    className="p-2 rounded-full hover:bg-[var(--surface-hover)] hover:text-[var(--text)] transition cursor-pointer"
+                    title="Menu"
+                    aria-label="Menu"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="12" cy="5" r="2" />
+                      <circle cx="12" cy="12" r="2" />
+                      <circle cx="12" cy="19" r="2" />
+                    </svg>
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {menuOpen && (
+                    <div className="absolute right-0 top-full mt-1 w-48 rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] shadow-xl py-1.5 z-50 text-sm">
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setShowProfileModal(true)
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-[var(--surface-hover)] text-[var(--text)] flex items-center justify-between"
+                      >
+                        <span>Profile & Note</span>
+                        <span className="text-xs">📝</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setSidebarView('contacts')
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-[var(--surface-hover)] text-[var(--text)]"
+                      >
+                        New chat
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setShowSettings(true)
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-[var(--surface-hover)] text-[var(--text)]"
+                      >
+                        Settings
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false)
+                          logout()
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-[var(--surface-hover)] text-red-400"
+                      >
+                        Log out
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
-              {/* Settings button */}
+            {/* Search chats */}
+            <div className="p-2 border-b border-[var(--border)]">
+              <div className="relative">
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search or start new chat"
+                  className="w-full bg-[var(--surface-hover)] rounded-lg pl-9 pr-3 py-1.5 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Conversation List */}
+            <div className="flex-1 overflow-y-auto">
+              {filteredConversations.map((c) => {
+                const title = titleFor(c)
+                const isActive = activeId === c.id
+                const unread = unreadMap[c.id] || 0
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveId(c.id)
+                      setSidebarOpen(false)
+                    }}
+                    className={`w-full text-left px-3 py-3 transition flex items-center gap-3 border-b border-[var(--border)]/40 cursor-pointer ${
+                      isActive
+                        ? 'bg-[var(--surface-active)]'
+                        : 'hover:bg-[var(--surface-hover)]'
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-[var(--wa-teal)] text-white font-semibold flex items-center justify-center text-base shrink-0 shadow-xs">
+                      {title[0]?.toUpperCase() || 'C'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`text-[14.5px] truncate ${
+                            unread > 0
+                              ? 'font-bold text-[var(--text)]'
+                              : 'font-medium text-[var(--text)]'
+                          }`}
+                        >
+                          {title}
+                        </span>
+                        <span
+                          className={`text-[11px] shrink-0 ${
+                            unread > 0
+                              ? 'text-[var(--wa-green)] font-semibold'
+                              : 'text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {new Date(c.lastMessageAt).toLocaleTimeString([], {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p
+                          className={`text-[13px] truncate ${
+                            unread > 0
+                              ? 'text-[var(--text)] font-semibold'
+                              : 'text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {c.lastMessagePreview || 'No messages yet'}
+                        </p>
+                        {/* WhatsApp Green Unread Message Notification Badge */}
+                        {unread > 0 && (
+                          <span className="min-w-5 h-5 px-1.5 rounded-full bg-[var(--wa-green)] text-white text-[11px] font-bold flex items-center justify-center shrink-0 ml-2 shadow-xs">
+                            {unread > 99 ? '99+' : unread}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+
+              {filteredConversations.length === 0 && (
+                <div className="py-16 text-center text-xs text-[var(--text-muted)] space-y-3 px-4">
+                  <div>No chats yet</div>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarView('contacts')}
+                    className="px-4 py-2 rounded-lg bg-[var(--wa-green)] text-white font-medium text-xs hover:bg-[var(--wa-green-hover)] transition cursor-pointer"
+                  >
+                    Find contacts on BUBI
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* ================= CONTACTS VIEW (WHATSAPP NEW CHAT) ================= */
+          <>
+            {/* WhatsApp Green Header */}
+            <div className="bg-[var(--wa-teal)] text-white px-4 py-4 flex items-center gap-4 shrink-0 shadow-sm">
               <button
                 type="button"
-                onClick={() => setShowSettings(true)}
-                className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition"
-                title="Settings"
-                aria-label="Settings"
+                onClick={() => setSidebarView('chats')}
+                className="p-1 hover:bg-black/10 rounded-full transition cursor-pointer"
+                aria-label="Back to chats"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="15 18 9 12 15 6" />
                 </svg>
               </button>
-
-              {/* New Chat button */}
-              <button
-                type="button"
-                onClick={() => setShowNew(true)}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition"
-              >
-                + New
-              </button>
+              <div>
+                <h2 className="text-base font-semibold leading-tight">New chat</h2>
+                <p className="text-xs text-emerald-100">{filteredUsers.length} contacts on BUBI</p>
+              </div>
             </div>
-          </div>
 
-          {/* Search conversations */}
-          <div className="mt-3 relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search chats…"
-              className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-1.5 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:border-blue-500"
-            />
-          </div>
-        </div>
+            {/* Search contacts input */}
+            <div className="p-2 border-b border-[var(--border)]">
+              <div className="relative">
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  placeholder="Search name or username"
+                  className="w-full bg-[var(--surface-hover)] rounded-lg pl-9 pr-3 py-1.5 text-xs text-[var(--text)] placeholder-[var(--text-muted)] outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
 
-        {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
-          {filteredConversations.map((c) => {
-            const title = titleFor(c)
-            const isActive = activeId === c.id
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setActiveId(c.id)}
-                className={`w-full text-left p-2.5 rounded-xl transition flex items-center gap-3 ${
-                  isActive
-                    ? 'bg-blue-600/10 text-blue-500'
-                    : 'hover:bg-[var(--surface-hover)] text-[var(--text)]'
-                }`}
-              >
-                <div className="w-10 h-10 rounded-full bg-blue-600/20 text-blue-500 font-semibold flex items-center justify-center text-sm shrink-0">
-                  {title[0]?.toUpperCase() || 'C'}
+            {/* Contacts Section Header */}
+            <div className="px-4 py-3 text-[11px] font-semibold text-[var(--wa-green)] tracking-wider">
+              CONTACTS ON BUBI
+            </div>
+
+            {/* Contacts List with unread badge support */}
+            <div className="flex-1 overflow-y-auto">
+              {filteredUsers.length === 0 && (
+                <div className="py-12 text-center text-xs text-[var(--text-muted)]">
+                  No contacts found
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium truncate">{title}</span>
-                    <span className="text-[11px] text-[var(--text-muted)] shrink-0">
-                      {new Date(c.lastMessageAt).toLocaleTimeString([], {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </span>
+              )}
+              {filteredUsers.map((u) => {
+                const conv = conversations.find((c) =>
+                  c.participantIds.includes(u.id),
+                )
+                const unread = conv ? unreadMap[conv.id] || 0 : 0
+                return (
+                  <div
+                    key={u.id}
+                    className="w-full px-4 py-3 hover:bg-[var(--surface-hover)] flex items-center justify-between gap-3 border-b border-[var(--border)]/30 transition group"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => void startDirect(u.id)}
+                      className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer"
+                    >
+                      <div className="relative shrink-0">
+                        <div className="w-11 h-11 rounded-full bg-[var(--wa-teal)] text-white font-semibold flex items-center justify-center text-base shadow-xs">
+                          {u.displayName?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                        {u.dailyNote && (
+                          <span
+                            className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-[var(--sidebar-bg)] flex items-center justify-center text-[7px]"
+                            title="Has daily note"
+                          >
+                            ✏️
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-sm text-[var(--text)] truncate">
+                            {u.displayName}
+                          </span>
+                          <span className="text-[11px] text-[var(--text-muted)] truncate">
+                            @{u.username}
+                          </span>
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)] truncate mt-0.5">
+                          {u.dailyNote ? (
+                            <span className="text-[var(--wa-green)] font-medium">
+                              📝 {u.dailyNote}
+                            </span>
+                          ) : (
+                            u.bio || 'Hey there! I am using BUBI'
+                          )}
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Unread badge on contact if they sent a message */}
+                      {unread > 0 && (
+                        <span className="min-w-5 h-5 px-1.5 rounded-full bg-[var(--wa-green)] text-white text-[11px] font-bold flex items-center justify-center shadow-xs">
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      )}
+
+                      {/* View Contact Profile Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setViewingContact(u)
+                        }}
+                        className="p-1.5 rounded-full text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-active)] transition cursor-pointer"
+                        title="View contact profile & daily note"
+                        aria-label="Contact profile"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="16" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12.01" y2="8" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
-                    {c.lastMessagePreview || 'No messages yet'}
-                  </p>
-                </div>
-              </button>
-            )
-          })}
-
-          {filteredConversations.length === 0 && (
-            <div className="py-12 text-center text-xs text-[var(--text-muted)]">
-              {searchQuery ? 'No chats found' : 'No chats yet. Tap + New to start one.'}
+                )
+              })}
             </div>
-          )}
-        </div>
+          </>
+        )}
+
+        {/* Mobile Bottom Navigation Bar (WhatsApp Mobile Style) */}
+        <nav className="md:hidden flex items-center justify-around border-t border-[var(--border)] bg-[var(--header-bg)] py-1.5 pb-[calc(6px+var(--safe-bottom))] shrink-0 select-none">
+          {/* Chats Tab with total unread notification badge */}
+          <button
+            type="button"
+            onClick={() => setSidebarView('chats')}
+            className={`flex flex-col items-center gap-1 py-1 px-6 rounded-xl transition cursor-pointer ${
+              sidebarView === 'chats'
+                ? 'text-[var(--wa-green)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            <div className="relative">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'chats' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              {totalUnreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-[var(--wa-green)] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
+                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[11px]">Chats</span>
+          </button>
+
+          {/* Contacts Tab */}
+          <button
+            type="button"
+            onClick={() => setSidebarView('contacts')}
+            className={`flex flex-col items-center gap-1 py-1 px-6 rounded-xl transition cursor-pointer ${
+              sidebarView === 'contacts'
+                ? 'text-[var(--wa-green)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'contacts' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span className="text-[11px]">Contacts</span>
+          </button>
+
+          {/* Settings Tab */}
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="flex flex-col items-center gap-1 py-1 px-6 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] transition cursor-pointer"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span className="text-[11px]">Settings</span>
+          </button>
+        </nav>
       </aside>
 
       {/* ===================== CHAT MAIN ===================== */}
       <main
         className={`${
           sidebarOpen ? 'hidden md:flex' : 'flex'
-        } flex-1 flex-col min-w-0 bg-[var(--bg)] relative`}
+        } flex-1 flex-col min-w-0 bg-[var(--bg)] relative wa-chat-bg`}
       >
         {!active ? (
-          <div className="flex-1 flex items-center justify-center p-4 text-center">
-            <div className="space-y-2 text-[var(--text-muted)]">
-              <div className="text-sm font-medium">Select a chat</div>
-              <p className="text-xs">Choose a conversation from the sidebar</p>
+          /* Empty WhatsApp Wallpaper State */
+          <div className="flex-1 flex items-center justify-center p-6 text-center select-none">
+            <div className="max-w-sm space-y-3 flex flex-col items-center">
+              <BubiLogo size={68} className="shadow-md rounded-2xl" />
+              <h2 className="text-xl font-bold text-[var(--text)] tracking-tight">
+                BUBI Messenger
+              </h2>
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed max-w-xs">
+                Minimalist pumpkin orange messaging. End-to-end real emojis, contacts, and instant real-time sync.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSidebarOpen(true)
+                  setSidebarView('contacts')
+                }}
+                className="mt-2 px-5 py-2.5 rounded-full bg-[var(--wa-green)] text-white text-xs font-semibold hover:bg-[var(--wa-green-hover)] transition cursor-pointer shadow-sm"
+              >
+                Start a new chat
+              </button>
             </div>
           </div>
         ) : (
+          /* Active Chat Conversation */
           <>
-            {/* Header */}
-            <header className="px-4 pt-[calc(10px+var(--safe-top))] pb-2.5 border-b border-[var(--border)] bg-[var(--surface)] flex items-center justify-between gap-3 shrink-0">
+            {/* WhatsApp Header */}
+            <header className="px-4 py-2.5 bg-[var(--header-bg)] border-b border-[var(--border)] flex items-center justify-between gap-3 shrink-0 select-none">
               <div className="flex items-center gap-3 min-w-0">
+                {/* Mobile Back to chats */}
                 <button
                   type="button"
-                  onClick={() => setSidebarOpen(true)}
-                  className="md:hidden text-xs text-blue-500 font-medium"
+                  onClick={() => {
+                    setSidebarOpen(true)
+                    setActiveId(null)
+                  }}
+                  className="md:hidden p-1.5 -ml-1 text-[var(--text-muted)] hover:text-[var(--text)] rounded-full transition cursor-pointer"
+                  aria-label="Back"
                 >
-                  Back
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
                 </button>
-                <div className="w-9 h-9 rounded-full bg-blue-600/20 text-blue-500 font-semibold flex items-center justify-center text-sm shrink-0">
-                  {titleFor(active)[0]?.toUpperCase() || 'C'}
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold text-sm truncate">{titleFor(active)}</div>
-                  <div className="text-xs text-[var(--text-muted)] truncate">
-                    {otherParticipant(active)?.username
-                      ? `@${otherParticipant(active)?.username}`
-                      : 'Chat'}
+
+                {/* Clickable Contact Profile Trigger */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const contact = otherParticipant(active)
+                    if (contact) setViewingContact(contact)
+                  }}
+                  className="flex items-center gap-3 min-w-0 text-left cursor-pointer group"
+                  title="View contact profile & daily note"
+                >
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-[var(--wa-teal)] text-white font-semibold flex items-center justify-center text-sm shadow-xs group-hover:opacity-90 transition">
+                      {titleFor(active)[0]?.toUpperCase() || 'C'}
+                    </div>
+                    {otherParticipant(active)?.dailyNote && (
+                      <span
+                        className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-[var(--header-bg)] flex items-center justify-center text-[7px]"
+                        title="Has daily note"
+                      >
+                        ✏️
+                      </span>
+                    )}
                   </div>
-                </div>
+
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm text-[var(--text)] truncate leading-tight group-hover:text-[var(--wa-green)] transition">
+                      {titleFor(active)}
+                    </div>
+                    <div className="text-[11px] text-[var(--wa-green)] truncate mt-0.5 flex items-center gap-1.5">
+                      <span>online</span>
+                      {otherParticipant(active)?.dailyNote ? (
+                        <>
+                          <span className="text-[var(--text-muted)]">·</span>
+                          <span className="text-[var(--text-muted)] truncate max-w-[150px] italic">
+                            "{otherParticipant(active)?.dailyNote}"
+                          </span>
+                        </>
+                      ) : otherParticipant(active)?.bio ? (
+                        <>
+                          <span className="text-[var(--text-muted)]">·</span>
+                          <span className="text-[var(--text-muted)] truncate max-w-[150px]">
+                            {otherParticipant(active)?.bio}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </button>
               </div>
 
-              {/* In-chat search toggle */}
-              <button
-                type="button"
-                onClick={() => setChatSearchOpen((v) => !v)}
-                className={`p-1.5 rounded-lg text-xs transition ${
-                  chatSearchOpen
-                    ? 'bg-blue-600 text-white'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)]'
-                }`}
-                title="Search in conversation"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-              </button>
+              {/* Header Actions */}
+              <div className="flex items-center gap-1 text-[var(--text-muted)]">
+                {/* View Contact Info Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const contact = otherParticipant(active)
+                    if (contact) setViewingContact(contact)
+                  }}
+                  className="p-2 rounded-full hover:bg-[var(--surface-hover)] hover:text-[var(--text)] transition cursor-pointer"
+                  title="View contact info & daily note"
+                  aria-label="View contact info"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChatSearchOpen((v) => !v)}
+                  className={`p-2 rounded-full hover:bg-[var(--surface-hover)] hover:text-[var(--text)] transition cursor-pointer ${
+                    chatSearchOpen ? 'text-[var(--wa-green)]' : ''
+                  }`}
+                  title="Search in chat"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </button>
+              </div>
             </header>
 
             {/* In-chat search bar */}
             {chatSearchOpen && (
-              <div className="px-4 py-2 bg-[var(--surface-hover)] border-b border-[var(--border)] flex items-center gap-2">
+              <div className="px-4 py-2 bg-[var(--header-bg)] border-b border-[var(--border)] flex items-center gap-2">
                 <input
                   type="text"
                   value={chatSearchQuery}
                   onChange={(e) => setChatSearchQuery(e.target.value)}
                   placeholder="Search in this chat…"
-                  className="flex-1 bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-1 text-xs text-[var(--text)] outline-none"
+                  className="flex-1 bg-[var(--surface-hover)] rounded-lg px-3 py-1.5 text-xs text-[var(--text)] outline-none"
                   autoFocus
                 />
                 <button
@@ -437,15 +978,15 @@ export function ChatScreen() {
                     setChatSearchOpen(false)
                     setChatSearchQuery('')
                   }}
-                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
                 >
-                  Cancel
+                  ✕
                 </button>
               </div>
             )}
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
+            {/* Message Stream */}
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-1.5">
               {loading && (
                 <div className="text-center py-4 text-xs text-[var(--text-muted)]">
                   Loading…
@@ -465,16 +1006,18 @@ export function ChatScreen() {
                   !displayedMessages[i + 1] ||
                   displayedMessages[i + 1].senderId !== m.senderId
                 const showTime =
-                  !prev || m.createdAt - prev.createdAt > 5 * 60 * 1000
+                  !prev || m.createdAt - prev.createdAt > 15 * 60 * 1000
 
                 return (
                   <div key={m.id || m.clientNonce}>
                     {showTime && (
-                      <div className="text-[11px] text-[var(--text-muted)] text-center my-2">
-                        {new Date(m.createdAt).toLocaleTimeString([], {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
+                      <div className="flex justify-center my-3 select-none">
+                        <span className="text-[11px] text-[var(--text-muted)] bg-[var(--header-bg)] border border-[var(--border)] px-2.5 py-0.5 rounded-md shadow-xs">
+                          {new Date(m.createdAt).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
                       </div>
                     )}
                     <MessageBubble
@@ -497,56 +1040,30 @@ export function ChatScreen() {
         )}
       </main>
 
-      {/* ===================== NEW CHAT MODAL ===================== */}
-      {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-enter">
-          <div className="w-full max-w-sm bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4 shadow-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">New Chat</h3>
-              <button
-                type="button"
-                onClick={() => setShowNew(false)}
-                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)]"
-              >
-                ✕
-              </button>
-            </div>
-
-            <input
-              type="text"
-              value={userSearchQuery}
-              onChange={(e) => setUserSearchQuery(e.target.value)}
-              placeholder="Search users…"
-              className="w-full bg-[var(--surface-hover)] border border-[var(--border)] rounded-xl px-3 py-1.5 text-xs text-[var(--text)] outline-none focus:border-blue-500"
-            />
-
-            <div className="max-h-56 overflow-y-auto space-y-1">
-              {filteredUsers.length === 0 && (
-                <div className="py-6 text-center text-xs text-[var(--text-muted)]">
-                  No users found
-                </div>
-              )}
-              {filteredUsers.map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => void startDirect(u.id)}
-                  className="w-full text-left p-2 rounded-xl hover:bg-[var(--surface-hover)] flex items-center justify-between text-xs transition"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{u.displayName}</div>
-                    <div className="text-[11px] text-[var(--text-muted)] truncate">@{u.username}</div>
-                  </div>
-                  <span className="text-blue-500 font-medium">Chat</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* ===================== SETTINGS MODAL ===================== */}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          onOpenProfile={() => setShowProfileModal(true)}
+        />
       )}
 
-      {/* ===================== SETTINGS MODAL ===================== */}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {/* ===================== PROFILE MODAL (USER) ===================== */}
+      {showProfileModal && (
+        <ProfileModal onClose={() => setShowProfileModal(false)} />
+      )}
+
+      {/* ===================== CONTACT PROFILE MODAL ===================== */}
+      {viewingContact && (
+        <ContactProfileModal
+          contact={viewingContact}
+          onClose={() => setViewingContact(null)}
+          onStartChat={() => {
+            void startDirect(viewingContact.id)
+            setViewingContact(null)
+          }}
+        />
+      )}
     </div>
   )
 }
