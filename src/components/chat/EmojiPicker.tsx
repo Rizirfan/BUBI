@@ -30,12 +30,7 @@ export function EmojiPicker({
   return (
     <div className="w-80 rounded-2xl bg-[#14151f]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-3.5 animate-enter text-white select-none">
       <div className="flex items-center justify-between gap-2 mb-2.5">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-          <span className="text-xs font-semibold tracking-wider uppercase text-zinc-400">
-            Vector Emojis
-          </span>
-        </div>
+        <span className="text-xs font-semibold text-zinc-300">Emojis</span>
         <button
           type="button"
           onClick={onClose}
@@ -54,7 +49,7 @@ export function EmojiPicker({
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search emojis (e.g. spark, lit)..."
+          placeholder="Search emojis…"
           className="w-full bg-white/5 border border-white/8 rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-indigo-500/60 focus:bg-white/8 transition"
         />
         {search && (

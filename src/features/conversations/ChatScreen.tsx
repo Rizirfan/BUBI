@@ -433,30 +433,20 @@ export function ChatScreen() {
 
           {filteredConversations.length === 0 && (
             <div className="py-12 px-4 text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-zinc-500">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
+              <div className="text-xs text-zinc-500">
+                {searchQuery ? 'No results found' : 'No conversations yet'}
               </div>
-              <div className="text-sm font-medium text-zinc-300">
-                {searchQuery ? 'No matching conversations' : 'No conversations yet'}
-              </div>
-              <p className="text-xs text-zinc-500 max-w-xs mx-auto">
-                {searchQuery
-                  ? 'Try searching with a different name or keyword.'
-                  : 'Start your first direct chat with any registered user.'}
-              </p>
               {!searchQuery && (
                 <button
                   type="button"
                   onClick={() => setShowNew(true)}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all inline-flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all inline-flex items-center gap-1.5"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
-                  <span>Start a Chat</span>
+                  <span>New Chat</span>
                 </button>
               )}
             </div>
@@ -473,40 +463,31 @@ export function ChatScreen() {
         {!active ? (
           /* Empty Selection State */
           <div className="flex-1 flex items-center justify-center p-6 text-center">
-            <div className="max-w-md space-y-4 animate-enter">
-              <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-blue-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400 shadow-xl shadow-indigo-950/50">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <div className="max-w-xs space-y-3 animate-enter">
+              <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-zinc-500">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
                 </svg>
               </div>
               <div className="space-y-1">
-                <h2 className="text-xl font-bold tracking-tight text-white">
-                  BUBI Messenger
+                <h2 className="text-sm font-semibold text-zinc-300">
+                  Select a chat
                 </h2>
-                <p className="text-sm text-zinc-400 max-w-sm mx-auto">
-                  Select a conversation from the left or create a new direct chat to begin exchanging messages and custom vector reactions.
+                <p className="text-xs text-zinc-500">
+                  Choose a conversation or start a new one.
                 </p>
               </div>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNew(true)}
-                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  <span>New Conversation</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(true)}
-                  className="md:hidden px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-medium"
-                >
-                  View Chats
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowNew(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all inline-flex items-center gap-1.5"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>New Chat</span>
+              </button>
             </div>
           </div>
         ) : (
@@ -540,17 +521,11 @@ export function ChatScreen() {
                   <div className="font-semibold text-sm text-white truncate leading-tight">
                     {titleFor(active)}
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="truncate">Live Sync Active</span>
+                  <div className="text-xs text-zinc-400 mt-0.5 truncate">
+                    {otherParticipant(active)?.username
+                      ? `@${otherParticipant(active)?.username}`
+                      : 'Direct chat'}
                   </div>
-                </div>
-              </div>
-
-              {/* Header Right Badges */}
-              <div className="flex items-center gap-2">
-                <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] text-zinc-400">
-                  <span>100% Vector</span>
                 </div>
               </div>
             </header>
@@ -559,23 +534,13 @@ export function ChatScreen() {
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-2">
               {loading && (
                 <div className="text-center py-6 text-xs text-zinc-500 animate-pulse">
-                  Syncing messages…
+                  Loading…
                 </div>
               )}
 
               {messages.length === 0 && !loading && (
-                <div className="text-center py-16 space-y-2 text-zinc-500">
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-zinc-400">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                  </div>
-                  <div className="text-sm font-medium text-zinc-300">
-                    Start the conversation
-                  </div>
-                  <p className="text-xs text-zinc-500 max-w-xs mx-auto">
-                    Type a message below or insert custom vector emojis like [:spark:] and [:bloom:].
-                  </p>
+                <div className="text-center py-16 text-xs text-zinc-500">
+                  No messages yet
                 </div>
               )}
 
@@ -626,10 +591,7 @@ export function ChatScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-enter">
           <div className="w-full max-w-md bg-[#12131d] border border-white/10 rounded-3xl shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-white">Start New Chat</h3>
-                <p className="text-xs text-zinc-400">Choose a user to begin a direct conversation</p>
-              </div>
+              <h3 className="text-sm font-semibold text-white">New Chat</h3>
               <button
                 type="button"
                 onClick={() => setShowNew(false)}
@@ -645,18 +607,16 @@ export function ChatScreen() {
                 type="text"
                 value={userSearchQuery}
                 onChange={(e) => setUserSearchQuery(e.target.value)}
-                placeholder="Search by name or @handle…"
+                placeholder="Search users…"
                 className="w-full bg-[#181926] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-indigo-500 transition"
               />
             </div>
 
             {/* User List */}
-            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+            <div className="max-h-60 overflow-y-auto space-y-1 pr-1">
               {filteredUsers.length === 0 && (
                 <div className="py-6 text-center text-xs text-zinc-500">
-                  {users.length === 1
-                    ? 'No other users registered yet. Invite someone or create a second account to test!'
-                    : 'No users match your search.'}
+                  No users found
                 </div>
               )}
               {filteredUsers.map((u) => (
@@ -684,7 +644,7 @@ export function ChatScreen() {
                     </div>
                   </div>
                   <span className="text-xs font-semibold text-indigo-400 group-hover:text-indigo-300 shrink-0">
-                    Message →
+                    Chat
                   </span>
                 </button>
               ))}

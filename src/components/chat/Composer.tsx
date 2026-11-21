@@ -100,7 +100,7 @@ export function Composer({
               }
             }}
             rows={1}
-            placeholder="Type a message… (e.g. hello [:spark:] [:bloom:])"
+            placeholder="Message…"
             className="w-full resize-none bg-transparent text-white text-[14.5px] leading-relaxed placeholder-zinc-500 outline-none max-h-32 py-1 scrollbar-none"
           />
         </div>

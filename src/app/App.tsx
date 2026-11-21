@@ -17,9 +17,8 @@ export function App() {
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-black text-xl shadow-xl shadow-indigo-600/30 animate-pulse mb-4">
           B
         </div>
-        <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
+        <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
           <span className="w-3.5 h-3.5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-          <span>Connecting to BUBI…</span>
         </div>
       </div>
     )
