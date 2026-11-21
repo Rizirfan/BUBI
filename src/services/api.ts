@@ -7,7 +7,17 @@ function normalizeBaseUrl(url: string) {
   return u.replace(/\/$/, '')
 }
 
-const BASE = normalizeBaseUrl(import.meta.env.VITE_API_URL || '/api')
+function resolveApiBase() {
+  if (import.meta.env.VITE_API_URL) {
+    return normalizeBaseUrl(import.meta.env.VITE_API_URL)
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return 'https://bubi-l4u2.onrender.com/api'
+  }
+  return '/api'
+}
+
+const BASE = resolveApiBase()
 
 function getToken() {
   return localStorage.getItem('bubi_token')

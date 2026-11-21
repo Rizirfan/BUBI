@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useAuthStore } from '@/features/auth/store'
 import { BubiLogo } from '@/components/ui/BubiLogo'
+import { PenEditIcon, ClockIcon } from '@/components/ui/Icons'
 
 interface ProfileModalProps {
   onClose: () => void
@@ -136,7 +137,7 @@ export function ProfileModal({ onClose }: ProfileModalProps) {
         <div className="space-y-2 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm">📝</span>
+              <PenEditIcon size={14} className="text-[var(--wa-green)]" />
               <label className="text-xs font-bold text-[var(--wa-green)] uppercase tracking-wider">
                 Today's Daily Note
               </label>
@@ -166,7 +167,12 @@ export function ProfileModal({ onClose }: ProfileModalProps) {
 
           <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
             <span>Short & unique update for today.</span>
-            {formattedNoteDate && <span>Last updated: {formattedNoteDate}</span>}
+            {formattedNoteDate && (
+              <span className="flex items-center gap-1">
+                <ClockIcon size={11} />
+                <span>Last updated: {formattedNoteDate}</span>
+              </span>
+            )}
           </div>
         </div>
 

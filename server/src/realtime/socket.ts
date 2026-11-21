@@ -48,9 +48,20 @@ export function setupSocket(app: FastifyInstance) {
     }
   })
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     const user = (socket as any).user as AuthPayload
     socket.join(`user:${user.sub}`)
+
+    // Auto-join all current conversation rooms for this user
+    try {
+      const memberships = await prisma.conversationMember.findMany({
+        where: { userId: user.sub },
+        select: { conversationId: true },
+      })
+      for (const m of memberships) {
+        socket.join(`conversation:${m.conversationId}`)
+      }
+    } catch {}
 
     socket.on('conversation:join', async (conversationId: string) => {
       const member = await prisma.conversationMember.findUnique({
@@ -82,10 +93,19 @@ export function setupSocket(app: FastifyInstance) {
         })
         await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
         const serialized = serializeMessage(msg)
+        
+        // Broadcast to conversation room and to each member directly
         io.to(`conversation:${conversationId}`).emit('message:new', serialized)
-        // also notify members not in room
         const members = await prisma.conversationMember.findMany({ where: { conversationId } })
-        for (const m of members) io.to(`user:${m.userId}`).emit('conversation:updated', { conversationId, lastMessagePreview: text, lastMessageAt: serialized.createdAt })
+        for (const m of members) {
+          io.to(`user:${m.userId}`).emit('message:new', serialized)
+          io.to(`user:${m.userId}`).emit('conversation:updated', {
+            conversationId,
+            lastMessagePreview: text,
+            lastMessageAt: serialized.createdAt,
+          })
+        }
+
         ack?.({ ok: true, message: serialized })
       } catch (e: any) {
         ack?.({ error: e?.message || 'Failed to send' })
@@ -106,12 +126,23 @@ export function setupSocket(app: FastifyInstance) {
       })
       if (existing) {
         await prisma.reaction.delete({ where: { id: existing.id } })
-        io.to(`conversation:${msg.conversationId}`).emit('reaction:updated', { action: 'removed', reaction: { id: existing.id, messageId, userId: user.sub, emojiId, createdAt: existing.createdAt.getTime() } })
+        const removedPayload = {
+          action: 'removed',
+          reaction: { id: existing.id, messageId, userId: user.sub, emojiId, createdAt: existing.createdAt.getTime() },
+        }
+        io.to(`conversation:${msg.conversationId}`).emit('reaction:updated', removedPayload)
+        for (const m of msg.conversation.members) {
+          io.to(`user:${m.userId}`).emit('reaction:updated', removedPayload)
+        }
         return ack?.({ ok: true, action: 'removed' })
       } else {
         const reaction = await prisma.reaction.create({ data: { messageId, userId: user.sub, emojiId } })
         const serialized = { id: reaction.id, messageId, userId: user.sub, emojiId, createdAt: reaction.createdAt.getTime() }
-        io.to(`conversation:${msg.conversationId}`).emit('reaction:updated', { action: 'added', reaction: serialized })
+        const addedPayload = { action: 'added', reaction: serialized }
+        io.to(`conversation:${msg.conversationId}`).emit('reaction:updated', addedPayload)
+        for (const m of msg.conversation.members) {
+          io.to(`user:${m.userId}`).emit('reaction:updated', addedPayload)
+        }
         return ack?.({ ok: true, action: 'added', reaction: serialized })
       }
     })

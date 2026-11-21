@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import type { UserProfile } from '@/types'
 import { BubiLogo } from '@/components/ui/BubiLogo'
+import { NoteIcon, ClockIcon, CopyIcon, ReplyChatIcon } from '@/components/ui/Icons'
 
 interface ContactProfileModalProps {
   contact: UserProfile
@@ -73,11 +74,14 @@ export function ContactProfileModal({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--wa-green)] uppercase tracking-wider">
-              <span>📝</span>
+              <NoteIcon size={14} className="text-[var(--wa-green)]" />
               <span>Today's Daily Note</span>
             </div>
             {formattedNoteDate && (
-              <span className="text-[10px] text-[var(--text-muted)]">{formattedNoteDate}</span>
+              <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+                <ClockIcon size={10} />
+                <span>{formattedNoteDate}</span>
+              </div>
             )}
           </div>
 

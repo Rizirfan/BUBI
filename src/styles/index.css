@@ -1,64 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
-  /* Pumpkin Orange & White Theme (Primary / Default) */
-  --bg: #fdfaf7;
-  --sidebar-bg: #ffffff;
-  --header-bg: #ffffff;
+  /* Refined Pumpkin Theme - warm, professional, distinctive */
+  --bg: #f7f4f1;
+  --bg-accent: #fff1e6;
+  --sidebar-bg: #fffdfb;
+  --header-bg: rgba(255, 253, 251, 0.88);
   --surface: #ffffff;
-  --surface-hover: #fff7ed;
-  --surface-active: #ffedd5;
+  --surface-hover: #fff6ee;
+  --surface-active: #ffeddc;
   --input-bg: #ffffff;
-  --border: #f0e6dc;
-  --text: #1c1917;
-  --text-muted: #78716c;
-  
-  /* Pumpkin Orange Accents */
-  --pumpkin: #f97316;
-  --pumpkin-hover: #ea580c;
-  --pumpkin-dark: #c2410c;
-  --pumpkin-light: #fff7ed;
-  
-  /* Bubbles */
-  --bubble-out: #f97316;
+  --border: #ece4dc;
+  --border-strong: #ddcec0;
+  --text: #1f1a17;
+  --text-muted: #756d67;
+  --text-faint: #9a918a;
+
+  --pumpkin: #ea6a1f;
+  --pumpkin-hover: #d95d15;
+  --pumpkin-dark: #b84b10;
+  --pumpkin-light: #fff3e8;
+  --pumpkin-soft: rgba(234, 106, 31, 0.12);
+  --pumpkin-ring: rgba(234, 106, 31, 0.22);
+
+  --bubble-out: linear-gradient(135deg, #f07a2c 0%, #e35f18 100%);
+  --bubble-out-solid: #ea6a1f;
   --bubble-out-text: #ffffff;
   --bubble-in: #ffffff;
-  --bubble-in-text: #1c1917;
-  
-  /* Controls & Badges */
-  --wa-green: #f97316;
-  --wa-green-hover: #ea580c;
-  --wa-teal: #ea580c;
-  --wa-check: #fdba74;
+  --bubble-in-text: #1f1a17;
+
+  --wa-green: #ea6a1f;
+  --wa-green-hover: #d95d15;
+  --wa-teal: #d95d15;
+  --wa-check: #ffc08a;
+
+  --shadow-sm: 0 1px 2px rgba(31, 26, 23, 0.04), 0 1px 8px rgba(31, 26, 23, 0.02);
+  --shadow-md: 0 8px 24px rgba(31, 26, 23, 0.08);
+  --radius: 16px;
 
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
 }
 
-/* Dark Mode option (Warm Dark Pumpkin) */
 html.dark-theme {
-  --bg: #140e0a;
-  --sidebar-bg: #1c140e;
-  --header-bg: #241a12;
-  --surface: #1c140e;
-  --surface-hover: #291e16;
-  --surface-active: #3a2a1f;
-  --input-bg: #241a12;
-  --border: #38281e;
-  --text: #fafaf9;
-  --text-muted: #a8a29e;
-  --bubble-out: #ea580c;
-  --bubble-out-text: #ffffff;
-  --bubble-in: #241a12;
-  --bubble-in-text: #fafaf9;
-  --pumpkin: #f97316;
-  --pumpkin-hover: #ea580c;
-  --pumpkin-dark: #c2410c;
-  --pumpkin-light: #291e16;
-  --wa-green: #f97316;
-  --wa-green-hover: #ea580c;
-  --wa-teal: #ea580c;
-  --wa-check: #fdba74;
+  --bg: #14110f;
+  --bg-accent: #201712;
+  --sidebar-bg: #1b1714;
+  --header-bg: rgba(27, 23, 20, 0.88);
+  --surface: #211c19;
+  --surface-hover: #2a231f;
+  --surface-active: #352b25;
+  --input-bg: #211c19;
+  --border: #332922;
+  --border-strong: #44362d;
+  --text: #f5f1ed;
+  --text-muted: #b0a59c;
+  --text-faint: #8a8078;
+
+  --pumpkin: #f07a2c;
+  --pumpkin-hover: #ff8a3d;
+  --pumpkin-dark: #d95d15;
+  --pumpkin-light: #2b211a;
+  --pumpkin-soft: rgba(240, 122, 44, 0.16);
+  --pumpkin-ring: rgba(240, 122, 44, 0.28);
+
+  --bubble-out: linear-gradient(135deg, #f07a2c 0%, #dc651d 100%);
+  --bubble-out-solid: #ea6a1f;
+  --bubble-out-text: #fffaf6;
+  --bubble-in: #25201c;
+  --bubble-in-text: #f5f1ed;
+
+  --wa-green: #f07a2c;
+  --wa-green-hover: #ff8a3d;
+  --wa-teal: #ff8a3d;
+  --wa-check: #ffc08a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 12px 30px rgba(0, 0, 0, 0.28);
 }
 
 html, body, #root {
@@ -69,9 +88,10 @@ html, body, #root {
   overflow: hidden;
   background-color: var(--sidebar-bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
 * {
@@ -83,27 +103,51 @@ input, button, textarea {
   font: inherit;
 }
 
-/* Chat canvas background pattern */
+::selection {
+  background: var(--pumpkin-soft);
+  color: var(--text);
+}
+
+/* Chat canvas background */
 .wa-chat-bg {
   background-color: var(--bg);
-  background-image: radial-gradient(rgba(249, 115, 22, 0.08) 1px, transparent 0);
-  background-size: 20px 20px;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(234, 106, 31, 0.07) 1px, transparent 0);
+  background-size: 24px 24px;
 }
 
 html.dark-theme .wa-chat-bg {
   background-color: var(--bg);
-  background-image: radial-gradient(rgba(249, 115, 22, 0.05) 1px, transparent 0);
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(240, 122, 44, 0.06) 1px, transparent 0);
+  background-size: 24px 24px;
 }
 
-/* Slim scrollbar */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(249, 115, 22, 0.25);
+  background: rgba(234, 106, 31, 0.2);
   border-radius: 999px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(249, 115, 22, 0.45);
+::-webkit-scrollbar-thumb:hover { background: rgba(234, 106, 31, 0.38); }
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid var(--pumpkin-ring);
+  outline-offset: 2px;
+}
+
+/* Smooth UI transitions */
+button, a, input, textarea {
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

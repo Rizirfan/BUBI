@@ -1,31 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="pumpkinBg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FF8A34"/>
-      <stop offset="100%" stop-color="#EA580C"/>
+    <linearGradient id="bubiOrangeGrad" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF7A18" />
+      <stop offset="50%" stop-color="#F96810" />
+      <stop offset="100%" stop-color="#EA580C" />
     </linearGradient>
-    <linearGradient id="innerGlow" x1="256" y1="90" x2="256" y2="422" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#FFF7ED"/>
+    <linearGradient id="bubbleGrad" x1="0" y1="100" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#FFF4EC" />
     </linearGradient>
-    <filter id="subtleShadow" x="80" y="80" width="352" height="360" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#7C2D12" flood-opacity="0.25"/>
+    <filter id="bubiShadow" x="80" y="80" width="352" height="360" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#7C2D12" flood-opacity="0.22" />
     </filter>
   </defs>
 
   {/* Squircle Base */}
-  <rect width="512" height="512" rx="128" fill="url(#pumpkinBg)"/>
+  <rect width="512" height="512" rx="134" fill="url(#bubiOrangeGrad)" />
 
   {/* Messenger Icon Graphic */}
-  <g filter="url(#subtleShadow)">
-    {/* Main Speech Bubble forming stylized "B" silhouette */}
-    <path d="M140 180C140 135.817 175.817 100 220 100H292C336.183 100 372 135.817 372 180V220C372 264.183 336.183 300 292 300H236L182 344V300H180C157.909 300 140 282.091 140 260V180Z" fill="url(#innerGlow)"/>
-    
-    {/* Secondary dynamic speech bubble tail / loop giving friendly B character */}
-    <circle cx="216" cy="200" r="22" fill="#EA580C"/>
-    <circle cx="288" cy="200" r="22" fill="#EA580C"/>
-    
-    {/* Happy conversation arc */}
-    <path d="M216 236C228 252 276 252 288 236" stroke="#EA580C" stroke-width="14" stroke-linecap="round"/>
+  <g filter="url(#bubiShadow)">
+    {/* Perfect Speech Bubble matching Brand Asset */}
+    <path
+      d="M194 108 H318 C369 108 400 138 400 190 V266 C400 317 369 348 318 348 H225 L159 415 L159 338 C128 333 108 307 108 266 V190 C108 138 138 108 194 108 Z"
+      fill="url(#bubbleGrad)"
+    />
+
+    {/* Eyes */}
+    <circle cx="215" cy="225" r="33" fill="#EA580C" />
+    <circle cx="302" cy="225" r="33" fill="#EA580C" />
+
+    {/* Friendly Smile Arc */}
+    <path
+      d="M220 271 Q258.5 305 297 271"
+      stroke="#EA580C"
+      stroke-width="21.5"
+      stroke-linecap="round"
+    />
   </g>
 </svg>

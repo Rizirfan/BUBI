@@ -14,9 +14,9 @@ export default defineConfig({
       manifest: {
         name: 'BUBI',
         short_name: 'BUBI',
-        description: 'Text messaging with custom emojis and reactions',
-        theme_color: '#0a84ff',
-        background_color: '#f2f2f7',
+        description: 'Pumpkin orange messaging with real emojis, contacts, and 10-line daily notes',
+        theme_color: '#EA580C',
+        background_color: '#FAF8F5',
         display: 'standalone',
         start_url: '/',
         icons: [

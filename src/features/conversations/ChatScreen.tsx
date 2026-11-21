@@ -10,7 +10,10 @@ import { Composer } from '@/components/chat/Composer'
 import { SettingsModal } from '@/components/settings/SettingsModal'
 import { ProfileModal } from '@/components/profile/ProfileModal'
 import { ContactProfileModal } from '@/components/profile/ContactProfileModal'
+import { NotesPage } from '@/features/notes/NotesPage'
+import { ProfilePage } from '@/features/profile/ProfilePage'
 import { BubiLogo, BubiBrand } from '@/components/ui/BubiLogo'
+import { NoteIcon, PenEditIcon } from '@/components/ui/Icons'
 
 function uid() {
   return crypto.randomUUID()
@@ -69,7 +72,7 @@ export function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([])
   const [reactions, setReactions] = useState<Reaction[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])
-  const [sidebarView, setSidebarView] = useState<'chats' | 'contacts'>('chats')
+  const [sidebarView, setSidebarView] = useState<'chats' | 'notes' | 'profile' | 'contacts'>('chats')
   const [menuOpen, setMenuOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
@@ -102,6 +105,10 @@ export function ChatScreen() {
   const totalUnreadCount = useMemo(() => {
     return Object.values(unreadMap).reduce((acc, count) => acc + count, 0)
   }, [unreadMap])
+
+  const contactsWithNotesCount = useMemo(() => {
+    return users.filter((u) => u.dailyNote && u.dailyNote.trim().length > 0).length
+  }, [users])
 
   async function refreshConversations() {
     try {
@@ -235,10 +242,20 @@ export function ChatScreen() {
       void refreshConversations()
     }
 
+    const onConnect = () => {
+      if (activeIdRef.current) {
+        socket.emit('conversation:join', activeIdRef.current)
+        void loadMessages(activeIdRef.current)
+      }
+      void refreshConversations()
+    }
+
+    socket.on('connect', onConnect)
     socket.on('message:new', onNew)
     socket.on('reaction:updated', onReaction)
     socket.on('conversation:updated', onConvUpdated)
     return () => {
+      socket.off('connect', onConnect)
       socket.off('message:new', onNew)
       socket.off('reaction:updated', onReaction)
       socket.off('conversation:updated', onConvUpdated)
@@ -393,55 +410,66 @@ export function ChatScreen() {
   }, [users, userSearchQuery, user])
 
   return (
-    <div className="h-full flex bg-[var(--sidebar-bg)] text-[var(--text)] overflow-hidden">
-      {/* ===================== SIDEBAR ===================== */}
-      <aside
-        className={`${
-          sidebarOpen ? 'flex' : 'hidden'
-        } md:flex flex-col w-full md:w-[360px] lg:w-[400px] shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-bg)] z-20`}
-      >
-        {sidebarView === 'chats' ? (
+    <div className="h-full flex flex-col bg-[var(--sidebar-bg)] text-[var(--text)] overflow-hidden">
+      {/* Upper Viewport Content Area */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* ===================== SIDEBAR ===================== */}
+        <aside
+          className={`${
+            sidebarOpen ? 'flex' : 'hidden'
+          } md:flex flex-col w-full md:w-[360px] lg:w-[400px] shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-bg)] z-20`}
+        >
+          {sidebarView !== 'contacts' ? (
           /* ================= CHATS VIEW ================= */
           <>
             {/* WhatsApp Header */}
             <div className="px-3.5 py-3 bg-[var(--header-bg)] flex items-center justify-between border-b border-[var(--border)]">
-              {/* User Avatar & Profile Trigger */}
+              {/* User Avatar & Profile Trigger -> Strictly redirects to Profile Page */}
               <button
                 type="button"
-                onClick={() => setShowProfileModal(true)}
-                className="flex items-center gap-3 text-left cursor-pointer group min-w-0"
-                title="View & Edit your profile & daily note"
+                onClick={() => {
+                  setSidebarView('profile')
+                  setSidebarOpen(false)
+                }}
+                className="flex items-center gap-2.5 text-left cursor-pointer group min-w-0 flex-1 hover:opacity-90 transition"
+                title="View your Profile & Bio page"
               >
-                <div className="relative shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-[var(--wa-teal)] text-white font-semibold flex items-center justify-center text-sm shadow-xs group-hover:opacity-90 transition">
-                    {user?.displayName?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  {user?.dailyNote ? (
-                    <span
-                      className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-[var(--header-bg)] flex items-center justify-center text-[7px]"
-                      title="Daily note active"
-                    >
-                      ✏️
-                    </span>
-                  ) : null}
+                <div
+                  style={{ backgroundColor: user?.avatarColor || undefined }}
+                  className="w-10 h-10 rounded-full bg-[var(--wa-teal)] text-white font-semibold flex items-center justify-center text-sm shadow-xs shrink-0 group-hover:scale-105 transition-transform"
+                >
+                  {user?.displayName?.[0]?.toUpperCase() || 'U'}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="font-semibold text-sm leading-tight text-[var(--text)] group-hover:text-[var(--wa-green)] transition truncate">
                     {user?.displayName}
                   </div>
-                  <div className="text-[11px] text-[var(--text-muted)] truncate flex items-center gap-1 mt-0.5">
-                    <span>@{user?.username}</span>
-                    {user?.dailyNote ? (
-                      <span className="text-[var(--wa-green)] font-semibold">· Note</span>
-                    ) : (
-                      <span className="text-[var(--wa-green)]">· Add note</span>
-                    )}
+                  <div className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
+                    @{user?.username}
                   </div>
                 </div>
               </button>
 
               {/* Action Icons */}
-              <div className="flex items-center gap-1 text-[var(--text-muted)]">
+              <div className="flex items-center gap-1.5 text-[var(--text-muted)] shrink-0">
+                {/* Top Add Note / Note Pill -> Strictly redirects to Notes Page */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarView('notes')
+                    setSidebarOpen(false)
+                  }}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 ${
+                    user?.dailyNote
+                      ? 'bg-[var(--surface-active)] text-[var(--wa-green)] border-[var(--wa-green)]/30 hover:bg-[var(--surface-hover)]'
+                      : 'bg-[var(--surface-hover)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text)] hover:border-[var(--wa-green)]'
+                  }`}
+                  title="Update your daily note on the Notes page"
+                >
+                  <PenEditIcon size={12} className={user?.dailyNote ? 'text-[var(--wa-green)]' : 'text-[var(--text-muted)]'} />
+                  <span>{user?.dailyNote ? 'My Note' : 'Add note'}</span>
+                </button>
+
                 {/* New Chat / Contacts Icon */}
                 <button
                   type="button"
@@ -475,16 +503,34 @@ export function ChatScreen() {
 
                   {/* Dropdown Menu */}
                   {menuOpen && (
-                    <div className="absolute right-0 top-full mt-1 w-48 rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] shadow-xl py-1.5 z-50 text-sm">
+                    <div className="absolute right-0 top-full mt-1 w-52 rounded-2xl bg-[var(--header-bg)] border border-[var(--border)] shadow-xl py-1.5 z-50 text-sm">
                       <button
                         onClick={() => {
                           setMenuOpen(false)
-                          setShowProfileModal(true)
+                          setSidebarView('profile')
+                          setSidebarOpen(false)
                         }}
                         className="w-full text-left px-4 py-2 hover:bg-[var(--surface-hover)] text-[var(--text)] flex items-center justify-between"
                       >
-                        <span>Profile & Note</span>
-                        <span className="text-xs">📝</span>
+                        <span>Profile &amp; Bio</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-muted)]" aria-hidden="true">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setSidebarView('notes')
+                          setSidebarOpen(false)
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-[var(--surface-hover)] text-[var(--text)] flex items-center justify-between"
+                      >
+                        <span>Daily Notes Page</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-muted)]" aria-hidden="true">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                        </svg>
                       </button>
                       <button
                         onClick={() => {
@@ -556,6 +602,7 @@ export function ChatScreen() {
                     type="button"
                     onClick={() => {
                       setActiveId(c.id)
+                      setSidebarView('chats')
                       setSidebarOpen(false)
                     }}
                     className={`w-full text-left px-3 py-3 transition flex items-center gap-3 border-b border-[var(--border)]/40 cursor-pointer ${
@@ -707,10 +754,10 @@ export function ChatScreen() {
                         </div>
                         {u.dailyNote && (
                           <span
-                            className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-[var(--sidebar-bg)] flex items-center justify-center text-[7px]"
+                            className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[var(--wa-green)] text-white border-2 border-[var(--sidebar-bg)] flex items-center justify-center shadow-xs"
                             title="Has daily note"
                           >
-                            ✏️
+                            <NoteIcon size={8} />
                           </span>
                         )}
                       </div>
@@ -725,8 +772,9 @@ export function ChatScreen() {
                         </div>
                         <div className="text-xs text-[var(--text-muted)] truncate mt-0.5">
                           {u.dailyNote ? (
-                            <span className="text-[var(--wa-green)] font-medium">
-                              📝 {u.dailyNote}
+                            <span className="inline-flex items-center gap-1 text-[var(--wa-green)] font-medium">
+                              <NoteIcon size={11} className="shrink-0" />
+                              <span className="truncate">{u.dailyNote}</span>
                             </span>
                           ) : (
                             u.bio || 'Hey there! I am using BUBI'
@@ -767,93 +815,70 @@ export function ChatScreen() {
             </div>
           </>
         )}
-
-        {/* Mobile Bottom Navigation Bar (WhatsApp Mobile Style) */}
-        <nav className="md:hidden flex items-center justify-around border-t border-[var(--border)] bg-[var(--header-bg)] py-1.5 pb-[calc(6px+var(--safe-bottom))] shrink-0 select-none">
-          {/* Chats Tab with total unread notification badge */}
-          <button
-            type="button"
-            onClick={() => setSidebarView('chats')}
-            className={`flex flex-col items-center gap-1 py-1 px-6 rounded-xl transition cursor-pointer ${
-              sidebarView === 'chats'
-                ? 'text-[var(--wa-green)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            <div className="relative">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'chats' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              {totalUnreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-[var(--wa-green)] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
-                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[11px]">Chats</span>
-          </button>
-
-          {/* Contacts Tab */}
-          <button
-            type="button"
-            onClick={() => setSidebarView('contacts')}
-            className={`flex flex-col items-center gap-1 py-1 px-6 rounded-xl transition cursor-pointer ${
-              sidebarView === 'contacts'
-                ? 'text-[var(--wa-green)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'contacts' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <span className="text-[11px]">Contacts</span>
-          </button>
-
-          {/* Settings Tab */}
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
-            className="flex flex-col items-center gap-1 py-1 px-6 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] transition cursor-pointer"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            <span className="text-[11px]">Settings</span>
-          </button>
-        </nav>
       </aside>
 
-      {/* ===================== CHAT MAIN ===================== */}
-      <main
-        className={`${
-          sidebarOpen ? 'hidden md:flex' : 'flex'
-        } flex-1 flex-col min-w-0 bg-[var(--bg)] relative wa-chat-bg`}
-      >
+      {/* ===================== CHAT MAIN, PROFILE PAGE, OR NOTES PAGE ===================== */}
+      {sidebarView === 'profile' ? (
+        <ProfilePage
+          onBackToChats={() => {
+            setSidebarView('chats')
+            setSidebarOpen(true)
+          }}
+          onOpenNotesPage={() => {
+            setSidebarView('notes')
+            setSidebarOpen(false)
+          }}
+        />
+      ) : sidebarView === 'notes' ? (
+        <NotesPage
+          contacts={users}
+          onBackToChats={() => {
+            setSidebarView('chats')
+            setSidebarOpen(true)
+          }}
+          onOpenChatWith={(userId) => {
+            void startDirect(userId)
+            setSidebarView('chats')
+          }}
+          onViewContactProfile={(c) => setViewingContact(c)}
+        />
+      ) : (
+        <main
+          className={`${
+            sidebarOpen ? 'hidden md:flex' : 'flex'
+          } flex-1 flex-col min-w-0 bg-[var(--bg)] relative wa-chat-bg`}
+        >
         {!active ? (
           /* Empty WhatsApp Wallpaper State */
           <div className="flex-1 flex items-center justify-center p-6 text-center select-none">
             <div className="max-w-sm space-y-3 flex flex-col items-center">
-              <BubiLogo size={68} className="shadow-md rounded-2xl" />
-              <h2 className="text-xl font-bold text-[var(--text)] tracking-tight">
-                BUBI Messenger
-              </h2>
+              <BubiBrand size={52} className="justify-center" />
               <p className="text-xs text-[var(--text-muted)] leading-relaxed max-w-xs">
-                Minimalist pumpkin orange messaging. End-to-end real emojis, contacts, and instant real-time sync.
+                Minimalist pumpkin orange messaging. End-to-end real emojis, contacts, and 10-line daily notes.
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSidebarOpen(true)
-                  setSidebarView('contacts')
-                }}
-                className="mt-2 px-5 py-2.5 rounded-full bg-[var(--wa-green)] text-white text-xs font-semibold hover:bg-[var(--wa-green-hover)] transition cursor-pointer shadow-sm"
-              >
-                Start a new chat
-              </button>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarOpen(true)
+                    setSidebarView('contacts')
+                  }}
+                  className="px-4 py-2 rounded-full bg-[var(--wa-green)] text-white text-xs font-semibold hover:bg-[var(--wa-green-hover)] transition cursor-pointer shadow-sm"
+                >
+                  Start a chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarView('notes')
+                    setSidebarOpen(false)
+                  }}
+                  className="px-4 py-2 rounded-full bg-[var(--surface-hover)] border border-[var(--border)] text-[var(--text)] text-xs font-semibold hover:bg-[var(--surface-active)] transition cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  <NoteIcon size={14} className="text-[var(--wa-green)]" />
+                  <span>Daily Notes</span>
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -893,10 +918,10 @@ export function ChatScreen() {
                     </div>
                     {otherParticipant(active)?.dailyNote && (
                       <span
-                        className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-[var(--header-bg)] flex items-center justify-center text-[7px]"
+                        className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[var(--wa-green)] text-white border-2 border-[var(--header-bg)] flex items-center justify-center shadow-xs"
                         title="Has daily note"
                       >
-                        ✏️
+                        <NoteIcon size={8} />
                       </span>
                     )}
                   </div>
@@ -1039,12 +1064,136 @@ export function ChatScreen() {
           </>
         )}
       </main>
+    )}
+      </div>
+
+      {/* ===================== PERSISTENT MOBILE BOTTOM NAVIGATION ===================== */}
+      {/* Persistently visible across Chats, Notes, Contacts, and Profile on mobile */}
+      {/* Hidden only when actively chatting inside a 1-on-1 conversation */}
+      {!activeId && (
+        <nav className="md:hidden flex items-center justify-around border-t border-[var(--border)] bg-[var(--header-bg)] py-1.5 pb-[calc(6px+var(--safe-bottom))] shrink-0 select-none z-30 shadow-sm">
+          {/* Chats Tab with total unread notification badge */}
+          <button
+            type="button"
+            onClick={() => {
+              setSidebarView('chats')
+              setSidebarOpen(true)
+              setActiveId(null)
+            }}
+            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
+              sidebarView === 'chats' && !activeId
+                ? 'text-[var(--wa-green)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            <div className="relative">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'chats' && !activeId ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              {totalUnreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-[var(--wa-green)] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
+                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[11px]">Chats</span>
+          </button>
+
+          {/* Notes Tab with contacts' daily notes count badge */}
+          <button
+            type="button"
+            onClick={() => {
+              setSidebarView('notes')
+              setSidebarOpen(false)
+              setActiveId(null)
+            }}
+            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
+              sidebarView === 'notes'
+                ? 'text-[var(--wa-green)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            <div className="relative">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'notes' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+              {contactsWithNotesCount > 0 && (
+                <span className="absolute -top-1 -right-2 min-w-3.5 h-3.5 px-1 rounded-full bg-amber-400 text-white text-[9px] font-bold flex items-center justify-center">
+                  {contactsWithNotesCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[11px]">Notes</span>
+          </button>
+
+          {/* Contacts Tab */}
+          <button
+            type="button"
+            onClick={() => {
+              setSidebarView('contacts')
+              setSidebarOpen(true)
+              setActiveId(null)
+            }}
+            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
+              sidebarView === 'contacts' && !activeId
+                ? 'text-[var(--wa-green)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'contacts' && !activeId ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span className="text-[11px]">Contacts</span>
+          </button>
+
+          {/* Profile Tab */}
+          <button
+            type="button"
+            onClick={() => {
+              setSidebarView('profile')
+              setSidebarOpen(false)
+              setActiveId(null)
+            }}
+            className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl transition cursor-pointer ${
+              sidebarView === 'profile'
+                ? 'text-[var(--wa-green)] font-semibold'
+                : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill={sidebarView === 'profile' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span className="text-[11px]">Profile</span>
+          </button>
+
+          {/* Settings Tab */}
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] transition cursor-pointer"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span className="text-[11px]">Settings</span>
+          </button>
+        </nav>
+      )}
 
       {/* ===================== SETTINGS MODAL ===================== */}
       {showSettings && (
         <SettingsModal
           onClose={() => setShowSettings(false)}
-          onOpenProfile={() => setShowProfileModal(true)}
+          onOpenProfile={() => {
+            setSidebarView('profile')
+            setSidebarOpen(false)
+          }}
         />
       )}
 

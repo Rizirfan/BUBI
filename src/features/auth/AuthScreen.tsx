@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuthStore } from './store'
-import { BubiLogo } from '@/components/ui/BubiLogo'
+import { BubiLogo, BubiBrand } from '@/components/ui/BubiLogo'
 
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -33,12 +33,10 @@ export function AuthScreen() {
     <div className="min-h-full bg-[var(--bg)] text-[var(--text)] flex items-center justify-center p-4">
       <div className="w-full max-w-xs relative z-10 animate-enter">
         <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-lg p-6">
-          {/* Logo & Header */}
-          <div className="text-center mb-5">
-            <BubiLogo size={52} className="mx-auto mb-2.5 shadow-md" />
-            <h1 className="text-lg font-bold tracking-tight text-[var(--text)]">
-              BUBI
-            </h1>
+          {/* Brand Logo Header */}
+          <div className="flex flex-col items-center justify-center mb-5">
+            <BubiBrand size={42} className="justify-center mb-1" />
+            <p className="text-[11px] text-[var(--text-muted)] font-medium">Simple, minimal messaging</p>
           </div>
 
           {/* Mode Switcher */}

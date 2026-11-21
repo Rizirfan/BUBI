@@ -95,7 +95,7 @@ export function MessageBubble({
           <div
             className={`px-3 py-1.5 text-[14px] leading-relaxed break-words shadow-sm select-text ${
               mine
-                ? 'bg-[var(--bubble-out)] text-[var(--bubble-out-text)] shadow-orange-950/10'
+                ? '[background:var(--bubble-out)] text-[var(--bubble-out-text)] shadow-orange-950/10'
                 : 'bg-[var(--bubble-in)] text-[var(--bubble-in-text)] border border-[var(--border)]'
             } ${
               showTail
