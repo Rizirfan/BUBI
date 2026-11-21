@@ -1,6 +1,13 @@
 import type { AuthUser, Conversation, Message, Reaction } from '@/types'
 
-const BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
+function normalizeBaseUrl(url: string) {
+  let u = url.trim()
+  u = u.replace(/^(https?:\/)([^/])/, '$1/$2') // fix https// missing colon
+  u = u.replace(/^(https?:\/\/)+/, (m) => m.toLowerCase().startsWith('https') ? 'https://' : 'http://')
+  return u.replace(/\/$/, '')
+}
+
+const BASE = normalizeBaseUrl(import.meta.env.VITE_API_URL || '/api')
 
 function getToken() {
   return localStorage.getItem('bubi_token')
