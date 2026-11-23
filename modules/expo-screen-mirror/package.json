@@ -1,0 +1,12 @@
+{
+  "name": "expo-screen-mirror",
+  "version": "1.0.0",
+  "description": "Local Expo module that streams the Android device screen over LAN as MJPEG for developer diagnostics.",
+  "main": "index.ts",
+  "private": true,
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

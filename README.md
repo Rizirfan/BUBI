@@ -1,116 +1,56 @@
-# BUBI
+# Welcome to your Expo app 👋
 
-BUBI is a web-based mobile messaging PWA focused on **text-only chat** with **custom emojis** and **reactions**. It uses an Apple Messages-inspired UI and a custom Node.js backend (no Firebase).
+This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-## Features
+## Get started
 
-- **Text messaging only** — no photo, video, or voice
-- **Custom emoji set** — unique SVG emojis for picker and inline message emojis
-- **Reactions** — quick emoji reactions on messages
-- **Real-time chat** — Socket.IO for live message/reaction updates
-- **Custom auth** — register/login with username, display name, and password (JWT + bcrypt)
-- **Local persistence** — Dexie/IndexedDB stores profile, conversations, messages, and reactions locally (Room-equivalent for web)
-- **PWA** — installable, mobile-first layout with safe-area support
+1. Install dependencies
 
-## Tech Stack
+   ```bash
+   npm install
+   ```
 
-**Frontend**
-- Vite + React + TypeScript
-- Tailwind CSS
-- Dexie (IndexedDB)
-- Socket.IO client
-- Zustand
-- `vite-plugin-pwa`
+2. Start the app
 
-**Backend**
-- Node.js + TypeScript
-- Fastify
-- Socket.IO
-- Prisma + SQLite
-- JWT auth (`@fastify/jwt`) + `bcryptjs`
+   ```bash
+   npx expo start
+   ```
 
-## Project Structure
+In the output, you'll find options to open the app in a
 
-```text
-.
-├── public/                 # PWA icons/assets
-├── server/                 # Custom backend
-│   ├── prisma/             # Prisma schema
-│   └── src/                # API, auth, realtime socket
-├── src/                    # Frontend app
-│   ├── app/                # App shell/routes
-│   ├── components/chat/    # Bubble, composer, emoji picker
-│   ├── db/                 # Dexie local DB
-│   ├── features/           # Auth, conversations, emojis
-│   └── services/           # API + socket clients
-├── DEPLOY.md               # Vercel + Render deployment guide
-└── vercel.json             # SPA rewrite for Vercel
-```
+- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
+- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-## Local Development
+You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-### 1. Backend
+## Get a fresh project
+
+When you're ready, run:
 
 ```bash
-cd server
-npm install
-cp .env.example .env   # Windows: Copy-Item .env.example .env
-npx prisma db push
-npm run dev
+npm run reset-project
 ```
 
-Backend runs on `http://localhost:3001`.
+This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
 
-### 2. Frontend
+### Other setup steps
 
-```bash
-npm install
-npm run dev
-```
+- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
+- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
+- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
 
-Frontend runs on `http://localhost:5173` and proxies `/api` and `/socket.io` to the backend.
+## Learn more
 
-## Environment Variables
+To learn more about developing your project with Expo, look at the following resources:
 
-### Frontend (`.env`)
+- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
-```env
-VITE_API_URL=https://your-render-service.onrender.com/api
-VITE_SOCKET_URL=https://your-render-service.onrender.com
-```
+## Join the community
 
-For local dev, these are optional because Vite proxy is configured.
+Join our community of developers creating universal apps.
 
-### Backend (`server/.env`)
-
-```env
-PORT=3001
-JWT_SECRET=change-me-in-production
-DATABASE_URL="file:./dev.db"
-CORS_ORIGIN=http://localhost:5173
-```
-
-For production, set `CORS_ORIGIN` to your Vercel URL.
-
-## Deployment
-
-See [DEPLOY.md](./DEPLOY.md) for Vercel (frontend) + Render (backend) steps.
-
-> **Note:** SQLite on Render is ephemeral unless you attach a persistent disk. For durable production data, use a persistent disk or migrate Prisma to PostgreSQL.
-
-## Scripts
-
-### Frontend
-- `npm run dev` — start Vite dev server
-- `npm run build` — typecheck + production build
-- `npm run preview` — preview production build
-
-### Backend (`server/`)
-- `npm run dev` — start backend with tsx watch
-- `npm run build` — generate Prisma client + compile TypeScript
-- `npm start` — run compiled server
-- `npm run prisma:push` — push Prisma schema to DB
-
-## License
-
-MIT (add a LICENSE file if you want to publish under MIT).
+- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
+- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
